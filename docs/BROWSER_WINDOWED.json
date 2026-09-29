@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-09-29T20:02:28.539Z",
+  "scope": "Local browser integration; no live E0–E6 result",
+  "headless": false,
+  "loopbackOnly": true,
+  "attached": true,
+  "chromeVersion": "154.0.8037.58",
+  "tabs": 2,
+  "http": {
+    "hostGuard": true,
+    "originGuard": true,
+    "bearerGuard": true,
+    "callbackStateGuard": true,
+    "localFileRange": true,
+    "folderConfinement": true
+  },
+  "meetInit": {
+    "syntheticCameraListed": true,
+    "camera": {
+      "width": 1280,
+      "height": 720,
+      "frameRate": 30
+    },
+    "audioFailure": "BLACKHOLE_2CH_MISSING",
+    "remoteMuted": true
+  },
+  "defaultTone": {
+    "paused": false,
+    "ended": false,
+    "currentTime": 1.121528,
+    "duration": 60,
+    "readyState": 4,
+    "sinkSelected": false,
+    "diagnosticDefaultTone": true,
+    "beeps": 0,
+    "maxDispatchLatenessMs": 0,
+    "mediaError": null
+  },
+  "playerInit": {
+    "lookupFailure": "BLACKHOLE_2CH_MISSING",
+    "playFailure": "BLACKHOLE_2CH_MISSING",
+    "detachedPaused": true,
+    "failedRouteStaysMuted": true,
+    "contextFailure": "BLACKHOLE_2CH_MISSING",
+    "contextState": "suspended",
+    "contextSinkType": "none"
+  },
+  "result": "PASS"
+}

@@ -1,0 +1,9 @@
+{
+  "recordedAt": "2026-09-29T20:04:08+00:00",
+  "experiment": "E1-prejoin-only",
+  "state": "joining",
+  "googleSession": "unknown",
+  "admissionRequested": false,
+  "meetingLinkStoredInIgnoredConfig": true,
+  "botLoginWindowOpenedAfterCheck": true
+}

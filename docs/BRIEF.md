@@ -91,3 +91,10 @@ PHASE 1 ACCEPTANCE (observed from a second device; record each in docs/ACCEPTANC
 9. A 2-hour run with no crash. The Mac is kept awake by `caffeinate -i -w <controller pid>`.
 
 Tests: one small node:test file for permissions/PIN, the command parser and link→adapter matching. No network in tests. README covers: installing BlackHole 2ch, creating the bot Google account, adding it to the saved meeting's Calendar invite, `npm run bot:login`, Spotify app + redirect URI, Apple developer token config, Jamendo client_id, the music folder, loading the unpacked extension. Commit in small steps. Do not implement video, games, artwork, yt-dlp or a co-watching add-on.
+
+
+## Owner clarification — 2026-09-30
+
+Build the Phase 0 harness before live setup is available, including launch/attach, both init scripts, /player, camtest, minimal Meet driver, Spotify PKCE/player control, and E0–E6 runners. Default-output synthetic local tone verification is explicitly authorized; protected service routing still requires BlackHole.
+
+Human filming during camtest is authorized in a consenting test meeting: humans silent and cameras off, frame only the bot tile, no protected music, beep only from local /player. Footage stays in ignored .local/evidence/ and is deleted after extracting offsets; only numbers enter FEASIBILITY.md. The prohibition applies to bot code capturing meeting media and remains in force.
