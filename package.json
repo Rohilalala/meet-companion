@@ -1,0 +1,12 @@
+{
+  "name": "meet-companion",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "preflight": "node scripts/preflight.js",
+    "bot:login": "node scripts/bot-login.js",
+    "check": "node --check scripts/settings.js && node --check scripts/preflight.js && node --check scripts/bot-login.js"
+  }
+}
