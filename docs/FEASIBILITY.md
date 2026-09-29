@@ -6,6 +6,8 @@ Date: 2026-09-30 (Asia/Kolkata). Machine evidence timestamps are UTC.
 
 The original request is preserved in [BRIEF.md](BRIEF.md). The Phase 0 harness now includes a branded-Chrome launcher, both tab init scripts, localhost tone/beep/file player, camtest, minimal Meet driver, Spotify PKCE/device-targeted API calls, and E0–E6 runners. No Phase 1 extension, activity queue, or production session controller is implemented.
 
+**New YouTube direction:** the owner requested native Meet tab presentation for future YouTube video, replacing the proposed camera route. No YouTube video has been sent through the existing diagnostic canvas. Presentation automation, receiver quality/sync and no-echo behavior are not implemented or qualified; the owner selected native shared-tab video and audio, with the bot camera/microphone off and no duplicate BlackHole microphone audio. See the amendment in BRIEF.md. This does not change the results below.
+
 ## Measured local evidence
 
 Recorded by `node scripts/preflight.js`: [PREFLIGHT.json](PREFLIGHT.json). The command performs read-only OS/config checks, requests no microphone access, and exits 1 for unmet prerequisites.

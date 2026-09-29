@@ -98,3 +98,11 @@ Tests: one small node:test file for permissions/PIN, the command parser and link
 Build the Phase 0 harness before live setup is available, including launch/attach, both init scripts, /player, camtest, minimal Meet driver, Spotify PKCE/player control, and E0–E6 runners. Default-output synthetic local tone verification is explicitly authorized; protected service routing still requires BlackHole.
 
 Human filming during camtest is authorized in a consenting test meeting: humans silent and cameras off, frame only the bot tile, no protected music, beep only from local /player. Footage stays in ignored .local/evidence/ and is deleted after extracting offsets; only numbers enter FEASIBILITY.md. The prohibition applies to bot code capturing meeting media and remains in force.
+
+## Owner direction — YouTube presentation, 2026-09-30
+
+For future YouTube video playback, use Meet's native presentation of the dedicated YouTube player tab instead of feeding video through the synthetic camera. This updates the earlier video exclusion for this specific route. The existing canvas is a diagnostic card, not a working YouTube video route. Keep the bot camera off during presentation; join and obtain normal admission before presenting. Share only the selected player tab.
+
+The owner selected native shared-tab video and audio. During YouTube presentation keep the bot microphone and camera off, keep received meeting audio silenced, and send audio only through Meet's tab presentation. Do not also send a BlackHole microphone copy. This is an explicit exception to the original BlackHole-only audio requirement for this mode; other music adapters retain their existing routing requirements. No media extraction, downloading, recording, or DRM bypass is introduced.
+
+Google documents [tab presentation with audio](https://support.google.com/meet/answer/9308856?co=GENIE.Platform%3DDesktop&hl=en) and recommends it for [higher-quality video and audio](https://workspaceupdates.googleblog.com/2020/04/high-quality-video-audio-meet.html). This is a design direction, not measured feasibility or a guaranteed priority/resolution. Before implementation is qualified, test the selected-tab picker and permissions, headless/windowed behavior, receiver resolution/frame rate, audio/video sync, and absence of echo. Phase 0 reporting still precedes Phase 1.
