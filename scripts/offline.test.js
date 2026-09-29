@@ -9,6 +9,40 @@ import { playerInit } from '../controller/player-init.js';
 import { playback } from '../controller/playback.js';
 import { presentationInit } from '../controller/presentation-init.js';
 import { parseBotCommand, ChatBot } from '../controller/bot-command.js';
+import { resolveArgs, streamArgs, errorCode as ytdlpError, target as ytdlpTarget, oneTimeIds } from '../controller/ytdlp.js';
+
+test('yt-dlp arguments are anonymous, single-video, audio-only, and end option parsing before the target', () => {
+  for (const build of [resolveArgs, streamArgs]) {
+    for (const value of ['https://www.youtube.com/watch?v=abcdefghijk', ytdlpTarget({ search: '--cookies-from-browser chrome' })]) {
+      const args = build(value);
+      assert.equal(args.some(arg => /^--cookies(?:-from-browser)?(?:=|$)/.test(arg) || arg === '--username' || arg === '--netrc'), false);
+      for (const flag of ['--ignore-config', '--no-cookies', '--no-cookies-from-browser', '--no-cache-dir', '--no-playlist']) assert.ok(args.includes(flag), flag);
+      assert.equal(args[args.indexOf('-f') + 1], 'bestaudio');
+      assert.equal(args.at(-2), '--'); assert.equal(args.at(-1), value);
+    }
+  }
+  assert.equal(ytdlpTarget({ search: 'bairi piya' }), 'ytsearch1:bairi piya');
+  assert.deepEqual(streamArgs('x').slice(-4), ['-o', '-', '--', 'x']);
+});
+
+test('yt-dlp failures map to fixed codes', () => {
+  assert.equal(ytdlpError('', Object.assign(new Error('spawn yt-dlp ENOENT'), { code: 'ENOENT' })), 'YTDLP_MISSING');
+  for (const text of ['ERROR: unable to download video data: HTTP Error 403: Forbidden', "ERROR: [youtube] x: Sign in to confirm you’re not a bot", 'ERROR: This video requires login', 'ERROR: login required']) assert.equal(ytdlpError(text), 'YOUTUBE_BLOCKED', text);
+  for (const text of ['ERROR: [youtube] x: Video unavailable', 'ERROR: Requested format is not available', '']) assert.equal(ytdlpError(text), 'MEDIA_UNAVAILABLE', text);
+});
+
+test('stream ids are single-use and expire', async () => {
+  const ids = oneTimeIds(50);
+  const id = ids.add({ target: 't' });
+  assert.match(id, /^[0-9a-f]{32}$/);
+  assert.deepEqual(ids.take(id), { target: 't' });
+  assert.equal(ids.take(id), null);
+  assert.equal(ids.take('unknown'), null);
+  const late = ids.add({ target: 'u' });
+  await new Promise(resolve => setTimeout(resolve, 70));
+  assert.equal(ids.take(late), null);
+});
+
 test('/bot distinguishes music from YouTube presentation and rejects lookalikes', () => {
   const cases = [
     ['https://open.spotify.com/track/fixture123?si=test', 'spotify', 'music'],
