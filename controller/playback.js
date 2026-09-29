@@ -65,10 +65,8 @@ export function playback(h) {
         await startMusic(command, async () => {
           const source = ytdlp.target(command), resolved = await ytdlp.resolve(source);
           title = resolved.title;
-          // Direct googlevideo URL first; if it does not start within 10 s, pipe yt-dlp stdout through a one-time local URL.
-          let timer;
-          const direct = Promise.race([load(resolved.url), new Promise((_, fail) => { timer = setTimeout(() => fail(new Error('DIRECT_TIMEOUT')), 10000); })]);
-          try { await direct; } catch { await load(h.server.origin + '/stream/' + h.server.streamOnce(source, resolved.ext)); } finally { clearTimeout(timer); }
+          // Always the local no-store stream: Chrome caches direct googlevideo audio in the bot profile, even with DevTools cache disabled.
+          await load(h.server.origin + '/stream/' + h.server.streamOnce(source, resolved.ext));
         });
       } catch (error) {
         await h.driver.sendChat('Meet Companion: ' + (/^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED')).catch(() => {});

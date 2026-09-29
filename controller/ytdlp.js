@@ -13,7 +13,7 @@ export function errorCode(text = '', spawnError = null) {
   return 'MEDIA_UNAVAILABLE';
 }
 
-// Resolves the direct audio URL in memory; the URL is never logged or sent to chat.
+// Resolves title, container and direct audio URL in memory (validation only; nothing is logged or sent to chat).
 export function resolve(value, { timeoutMs = 20000 } = {}) {
   return new Promise((done, fail) => {
     const child = spawn('yt-dlp', resolveArgs(value), { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -31,7 +31,7 @@ export function resolve(value, { timeoutMs = 20000 } = {}) {
   });
 }
 
-// Fallback: yt-dlp writes the audio to stdout only. The caller kills the child when the response closes.
+// Playback source: yt-dlp writes the audio to stdout only. The caller kills the child when the response closes.
 export const stream = value => spawn('yt-dlp', streamArgs(value), { stdio: ['ignore', 'pipe', 'ignore'] });
 
 export function oneTimeIds(ttlMs = 60000) {

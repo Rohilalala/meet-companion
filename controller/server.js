@@ -63,7 +63,7 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
           stream.on('error', () => response.destroy()); response.on('close', () => stream.destroy()); stream.pipe(response); return;
         }
         const nonce = randomBytes(18).toString('base64');
-        response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; media-src 'self' blob: https://*.googlevideo.com; connect-src 'self'; frame-ancestors 'none'`);
+        response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'`);
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         response.end(template.replace('__NONCE__', nonce).replace('__DEFAULT_ALLOWED__', String(allowDefaultTone))); return;
       }
