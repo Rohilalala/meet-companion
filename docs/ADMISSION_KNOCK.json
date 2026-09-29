@@ -46,6 +46,10 @@
     "microphoneOffVerified": true,
     "cameraOffVerified": true,
     "audioPlayed": false,
-    "holdLimitMinutes": 10
+    "holdLimitMinutes": 10,
+    "echoReportedByOwner": true,
+    "disconnectedToStopEcho": true,
+    "ownerConfirmedEchoStopped": true,
+    "liveEchoFixVerified": false
   }
 }

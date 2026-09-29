@@ -66,6 +66,27 @@ export function meetInit() {
   document.addEventListener('play', event => silence(event.target), true);
   document.addEventListener('volumechange', event => { if (event.target instanceof HTMLMediaElement && !muted.get.call(event.target)) muted.set.call(event.target, true); }, true);
   silence(document);
+  // Web Audio bypasses HTMLMediaElement.muted. Meet must never render it to
+  // speakers or BlackHole; only the separate player tab may output audio.
+  const NativeContext = window.AudioContext;
+  if (NativeContext) {
+    const setSink = NativeContext.prototype.setSinkId;
+    NativeContext.prototype.setSinkId = async function () {
+      if (!setSink) throw new Error('MEET_SILENT_OUTPUT_UNAVAILABLE');
+      return setSink.call(this, { type: 'none' });
+    };
+    const SilentContext = new Proxy(NativeContext, { construct(Target, args) {
+      if (!setSink) throw new Error('MEET_SILENT_OUTPUT_UNAVAILABLE');
+      const context = Reflect.construct(Target, [{ ...args[0], sinkId: { type: 'none' } }]);
+      if (context.sinkId?.type !== 'none') {
+        context.close().catch(() => {});
+        throw new Error('MEET_SILENT_OUTPUT_UNAVAILABLE');
+      }
+      return context;
+    } });
+    window.AudioContext = SilentContext;
+    if (window.webkitAudioContext) window.webkitAudioContext = SilentContext;
+  }
   window.meetCompanion = {
     camtest(startAt = Date.now() + 1000) { epoch = startAt; return { width: canvas.width, height: canvas.height, requestedFps: 30, epoch }; },
     stopCamtest() { epoch = null; },

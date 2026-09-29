@@ -132,3 +132,32 @@ test('Meet microphone override pins BlackHole, disables processing, and never fa
   await assert.rejects(() => mediaDevices.getUserMedia({ audio: true }), /BLACKHOLE_2CH_MISSING/);
   assert.equal(captured, undefined);
 });
+
+test('Meet Web Audio output stays silent across constructor options and sink changes', async () => {
+  class MediaElement { play() {} }
+  Object.defineProperty(MediaElement.prototype, 'muted', { configurable: true, get() { return this.silent ?? false; }, set(value) { this.silent = value; } });
+  class AudioContext {
+    constructor(options = {}) { this.options = options; this.sinkId = options.sinkId ?? ''; }
+    async setSinkId(sink) { this.sinkId = sink; }
+    async close() { this.closed = true; }
+  }
+  class Document { createElement() {} }
+  class Element { attachShadow() {} }
+  const context = {
+    window: { Audio: MediaElement, AudioContext, webkitAudioContext: AudioContext },
+    navigator: { mediaDevices: { enumerateDevices: async () => [], getUserMedia: async () => {} } },
+    HTMLMediaElement: MediaElement, Document, Element, setInterval() {},
+    MutationObserver: class { observe() {} },
+    document: { createElement: () => ({ getContext: () => ({ fillRect() {}, fillText() {} }) }), querySelectorAll: () => [], addEventListener() {} },
+  };
+  runInNewContext(`(${meetInit.toString()})()`, context);
+  for (const Constructor of [context.window.AudioContext, context.window.webkitAudioContext]) {
+    const audio = new Constructor({ sinkId: 'blackhole-fixture', sampleRate: 48000 });
+    assert.equal(audio.sinkId.type, 'none');
+    assert.equal(audio.options.sampleRate, 48000);
+    await audio.setSinkId('');
+    assert.equal(audio.sinkId.type, 'none');
+    await audio.setSinkId('blackhole-fixture');
+    assert.equal(audio.sinkId.type, 'none');
+  }
+});

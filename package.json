@@ -13,6 +13,7 @@
     "bot:launch": "node scripts/bot-launch.js",
     "verify:offline": "node --test scripts/offline.test.js",
     "verify:browser": "node scripts/verify-browser.js",
+    "verify:meet-silence": "node scripts/verify-meet-silence.js",
     "e0": "node scripts/e0.js",
     "e1": "node scripts/e1.js",
     "e2": "node scripts/e2.js",

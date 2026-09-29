@@ -38,7 +38,7 @@ Evidence: [headless Chrome](BROWSER_HEADLESS.json), [windowed Chrome](BROWSER_WI
 | Local tone | 440 Hz, 60-second decoded duration, readyState 4, unpaused with >1 second of advancing currentTime, default sink | Stopped after about 1.2 s; this proves browser playback, not human audibility or a 60-second receiver run |
 | Local file server | Generated WAV header served via 206 byte range; traversal outside folder refused | Fixture is generated silence, never recorded media |
 | HTTP boundaries | Forged Host, cross-origin player request and bad bearer refused; correct extension origin + in-memory token accepted; unsolicited callback refused | Phase 0 harness, not extension acceptance |
-| Offline unit checks | 6/6 `node:test` cases pass; fake fetch only, zero network | PKCE state/replay/S256, targeted Spotify commands, strict links, forced BlackHole constraints, admission classification and media-off checks |
+| Offline unit checks | 7/7 `node:test` cases pass; fake fetch only, zero network | PKCE state/replay/S256, targeted Spotify commands, strict links, forced BlackHole constraints, admission classification, media-off checks and silent Web Audio output |
 
 The first browser check exposed a serialization issue: Chrome's AudioSinkInfo does not serialize its `type` as an enumerable property. Reading `sinkId.type` explicitly verifies `none`. A subsequent relaunch found a stale profile lock with a dead PID after abrupt shutdown. The launcher now uses CDP `Browser.close`, waits for process exit, refuses live locks and lets Chrome recover its own dead-PID lock. Repeated launches, including windowed mode, succeeded; no profile files were manually deleted.
 
@@ -124,6 +124,12 @@ After one manual login, run five complete controller/browser relaunch cycles aga
 If Google cannot persist, **STOP**. Report other services' signed-out states separately; no sign-in automation as a repair.
 
 ### E3 — independent audio-route verification
+
+**Echo incident:** after the host-confirmed admission, the owner reported hearing their own voice. The bot was disconnected immediately; the owner confirmed that the echo stopped. This establishes an association with the connected bot, not the precise return path. No audio was recorded. Read-only preflight at 2026-09-29T20:33:41.763Z still reported BlackHole as non-default and no default aggregate requiring review.
+
+The Meet init script previously muted HTML media elements but did not constrain Web Audio output. It now constructs AudioContexts with the silent sink and forces subsequent setSinkId calls to that sink, including the webkit alias; unsupported silent output fails closed. This closes a verified code gap, but it is not proof of the live echo cause or resolution. The Chrome silent-sink contract is documented in [AudioContext.setSinkId](https://developer.mozilla.org/en-US/docs/Web/API/AudioContext/setSinkId).
+
+`npm run verify:meet-silence` passed in branded headless Chrome on localhost: actual native muted state stays true for attached/detached audio; a running synthetic oscillator retains sink type none after attempted default/device changes; the separate player context remains unaffected. Seven offline tests pass. See [MEET_SILENCE.json](MEET_SILENCE.json). The bot remains disconnected; repeat the live no-echo check before qualifying E3.
 
 Status: **NOT RUN END TO END**. BlackHole device selection is verified and the latest admission is host-confirmed; source logins and receiver observation remain unverified.
 

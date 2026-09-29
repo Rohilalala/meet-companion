@@ -1,0 +1,17 @@
+{
+  "checkedAt": "2026-09-29T20:33:19.677Z",
+  "scope": "Local synthetic output isolation; live echo fix unverified",
+  "headless": true,
+  "loopbackOnly": true,
+  "attached": true,
+  "chromeVersion": "154.0.8037.58",
+  "tabs": 2,
+  "actualMuted": true,
+  "detachedMuted": true,
+  "initialSink": "none",
+  "afterDefaultAttempt": "none",
+  "afterDeviceAttempt": "none",
+  "runningSilent": true,
+  "playerUnaffected": true,
+  "result": "PASS"
+}
