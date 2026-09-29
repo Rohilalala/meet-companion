@@ -9,11 +9,13 @@ await run('E1', async () => {
     if (!link) return blocked('E1', [route === 'external' ? 'externalMeetingLink' : 'meetingLink']);
     const configured = await answer(`Host: ${route} test access/invitation settings prepared? [yes/no]`);
     if (configured !== 'yes') return blocked('E1', ['host-prepared route']);
+    let botInCall = false;
     try {
       emit('E1', { route, bot: await h.driver.join(link) });
-      await h.driver.leave();
+      botInCall = true;
     } catch (error) { emit('E1', { route, botResult: (await import('./experiment.js')).errorCode(error) }); }
     const host = await answer('Host observation: [admitted/request-seen/auto-denied/no-request/unobserved]');
-    emit('E1', { route, hostObservation: ['admitted', 'request-seen', 'auto-denied', 'no-request'].includes(host) ? host : 'unobserved', exactUIWording: 'Transcribe sanitized host/bot system wording directly into FEASIBILITY.md; no chat or links.', gate: 'Evaluate invitee, knock and member outcomes together; all failing means STOP.' });
+    emit('E1', { route, admissionConfirmed: botInCall && host === 'admitted', hostObservation: ['admitted', 'request-seen', 'auto-denied', 'no-request'].includes(host) ? host : 'unobserved', exactUIWording: 'Transcribe sanitized host/bot system wording directly into FEASIBILITY.md; no chat or links.', gate: 'Evaluate invitee, knock and member outcomes together; all failing means STOP.' });
+    if (botInCall) await h.driver.leave();
   } finally { await h.close(); }
 });

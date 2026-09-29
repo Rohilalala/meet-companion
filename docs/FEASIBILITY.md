@@ -2,7 +2,7 @@
 
 Date: 2026-09-30 (Asia/Kolkata). Machine evidence timestamps are UTC.
 
-**Decision: E1 ASK-TO-JOIN SUCCEEDED; REMAINING LIVE GATES UNPROVEN. Stop before Phase 1.** The bot requested admission to the owner-supplied meeting, reached in_call in headless branded Chrome, then left at the end of the admission test. No receiver-audible playback has been tested. Ask-to-join admission is established from the bot UI; host-side observation is pending. Five-relaunch session persistence, audible playback, receiver camera quality, chat reliability and Spotify control remain unproven. Missing prerequisites are not failed experiments and do not establish that a fallback architecture is needed.
+**Decision: latest ASK-TO-JOIN confirmed by the host; earlier admission claim retracted. Remaining live gates unproven. Stop before Phase 1.** The owner reported that the earlier attempt was never admitted. On a separately authorized retry, the owner confirmed admission; a subsequent bot UI check also reports in_call. Admission latency was not measured. The retry initially had its synthetic camera and BlackHole microphone on; both were then turned off and verified. No receiver-audible playback has been tested. Session persistence, playback, receiver camera quality, chat reliability and Spotify control remain unproven.
 
 The original request is preserved in [BRIEF.md](BRIEF.md). The Phase 0 harness now includes a branded-Chrome launcher, both tab init scripts, localhost tone/beep/file player, camtest, minimal Meet driver, Spotify PKCE/device-targeted API calls, and E0–E6 runners. No Phase 1 extension, activity queue, or production session controller is implemented.
 
@@ -38,7 +38,7 @@ Evidence: [headless Chrome](BROWSER_HEADLESS.json), [windowed Chrome](BROWSER_WI
 | Local tone | 440 Hz, 60-second decoded duration, readyState 4, unpaused with >1 second of advancing currentTime, default sink | Stopped after about 1.2 s; this proves browser playback, not human audibility or a 60-second receiver run |
 | Local file server | Generated WAV header served via 206 byte range; traversal outside folder refused | Fixture is generated silence, never recorded media |
 | HTTP boundaries | Forged Host, cross-origin player request and bad bearer refused; correct extension origin + in-memory token accepted; unsolicited callback refused | Phase 0 harness, not extension acceptance |
-| Offline unit checks | 4/4 `node:test` cases pass; fake fetch only, zero network | PKCE state/replay/S256, targeted Spotify commands, strict links, forced BlackHole constraints |
+| Offline unit checks | 6/6 `node:test` cases pass; fake fetch only, zero network | PKCE state/replay/S256, targeted Spotify commands, strict links, forced BlackHole constraints, admission classification and media-off checks |
 
 The first browser check exposed a serialization issue: Chrome's AudioSinkInfo does not serialize its `type` as an enumerable property. Reading `sinkId.type` explicitly verifies `none`. A subsequent relaunch found a stale profile lock with a dead PID after abrupt shutdown. The launcher now uses CDP `Browser.close`, waits for process exit, refuses live locks and lets Chrome recover its own dead-PID lock. Repeated launches, including windowed mode, succeeded; no profile files were manually deleted.
 
@@ -56,14 +56,18 @@ The owner installed BlackHole and restarted. Node 22 preflight now passes: Black
 
 The first actual join attempt stopped before requesting admission because Chrome labels both devices `BlackHole 2ch (Virtual)`. The exact plain-name matcher incorrectly reported the device missing. The offline regression failed with that observed label, then passed after accepting the exact optional ` (Virtual)` suffix in both init scripts. No other audio device is accepted as a fallback.
 
-On retry in headless Chrome, the bot clicked Ask to join, spent **29,660 ms** waiting for admission, and reached `in_call`. Pre-join preparation took **4,158 ms**. The admission test then left automatically. Camera and microphone were off for entry. Host-side UI observation has not yet been supplied, so manual host admission versus automatic admission is not inferred.
+The earlier retry emitted `in_call` after **29,660 ms**, then left automatically. **That admission claim is retracted:** the owner reports that it was never admitted. The number is time to an unreliable UI classification, not admission latency. The old driver accepted a Leave call button alone and E1 left before collecting host confirmation. No saved waiting-room DOM establishes the exact historical trigger.
+
+The owner explicitly requested a fresh join request and confirmed “Admitted now.” This headless retry stayed open for host observation. A modal hid controls from accessibility-role queries even though they were rendered; the owner correctly reported that the synthetic camera and microphone were on. Explicit OFF actions changed both controls to their disabled state. At **2026-09-29T20:28:26.211Z**, the updated driver reported `in_call`, microphoneOff=true and cameraOff=true. No admission latency was measured and no tone/music was played.
+
+The driver now requires Leave call plus Meeting details, prioritizes waiting/terminal wording, and verifies media disabled before requesting admission and again after detecting entry. E1 collects host confirmation before leaving. Six offline regressions pass, including leave-only false positives and media controls hidden from accessibility. The corrected disableMedia method was also verified on the live admitted tab; a full new join with these code changes remains untested.
 
 A separate non-playing check selected the tabs by exact origin and required their init guards. The actual audio input reported BlackHole's exact device ID with echoCancellation=false, noiseSuppression=false and autoGainControl=false. HTMLMediaElement and AudioContext sink IDs both matched BlackHole. No tone or service music was played, so this is device-selection evidence, not an E3 audibility pass. A preceding extra diagnostic used positional tab selection and failed before reporting results; it was discarded. The corrected diagnostic uses an explicit exact BlackHole constraint even behind the Meet override.
 
 ## Required setup to resume
 
 1. BlackHole installation and non-default input/output checks now pass. Keep the macOS output unchanged and recheck after future audio-device changes.
-2. Google sign-in is completed according to the owner, and a live bot admission succeeded. The three service-account logins and five-relaunch persistence checks still need verification. Fully close the bot login browser before controlled relaunches.
+2. Google sign-in is completed according to the owner, and the latest live bot admission is confirmed by the owner (the earlier result was invalidated). The three service-account logins and five-relaunch persistence checks still need verification. Fully close the bot login browser before controlled relaunches.
 3. The saved test meeting is now configured. Arrange its cooperating host, invite the bot to its Calendar event, and arrange a second meeting hosted by someone else. Do not publish meeting codes in this report.
 4. Arrange a second receiver device and two test participants. E4 additionally needs laptop/phone receiver configurations and the authorized filming conditions below.
 5. Prepare the owner's Spotify Premium account and development-mode app (PKCE redirect/scopes in README). Apple Music/YouTube Music subscriptions and usable test links are needed for their individual checks. Enter credentials locally, never in chat or tracked files.
@@ -74,13 +78,13 @@ All numerical result fields below are **not measured**. Fill them only from obse
 
 ### E0 — headless versus normal-window mode
 
-Status: **PARTIAL**. Headless admission now passed in E1; Spotify playback and receiver audibility remain untested.
+Status: **PARTIAL**. The latest headless admission is host-confirmed; Spotify playback and receiver audibility remain untested.
 
 Spawn branded Chrome with the dedicated non-default profile and fixed debugging port bound to loopback, attach using Playwright `connectOverCDP`, and use the exact flags in BRIEF.md. Do not use Playwright launch defaults, fake media, `--mute-audio`, or automation sign-in. Verify the actual debugging listener is loopback-only.
 
 | Required observation | Result |
 | --- | --- |
-| Headless bot admitted and visible as its own participant | Bot reached in_call in E1; host-side observation pending |
+| Headless bot admitted and visible as its own participant | Latest retry: owner confirmed admitted; bot UI subsequently agreed |
 | Official open.spotify.com player audibly playing | Not run |
 | Player output routed to BlackHole and heard on a second device | Not run |
 
@@ -88,12 +92,12 @@ Only all three passing establishes headless viability. Any observed failure choo
 
 ### E1 — admission
 
-Status: **ASK-TO-JOIN PASS from bot UI**. Invitee/member/external-host cases remain untested; host-side observation pending.
+Status: **LATEST ASK-TO-JOIN HOST-CONFIRMED**. The earlier bot-only result is invalidated. Invitee/member/external-host cases remain untested; the corrected full join flow needs a fresh qualification run.
 
 | Route | Host UI seen | Bot UI seen | Time to admission/denial | Result |
 | --- | --- | --- | --- | --- |
 | (a) Saved meeting as Calendar invitee | Not observed | Not observed | Not measured | Not run |
-| (b) Saved meeting using Ask to join | Pending owner observation | Ask to join → in_call → left after test | 29,660 ms from click | Admitted |
+| (b) Saved meeting using Ask to join | Owner: admitted on latest retry | Ask to join; later Leave call + Meeting details | Not measured | Latest retry confirmed; earlier result invalidated |
 | (c) Meeting owned by someone else using Ask to join | Not observed | Not observed | Not measured | Not run |
 | `spaces.members` route if (a)/(b) cannot admit | Not observed | Not observed | Not measured | Not run |
 
@@ -121,7 +125,7 @@ If Google cannot persist, **STOP**. Report other services' signed-out states sep
 
 ### E3 — independent audio-route verification
 
-Status: **NOT RUN END TO END**. BlackHole device selection and one admission now pass; source logins and receiver observation remain unverified.
+Status: **NOT RUN END TO END**. BlackHole device selection is verified and the latest admission is host-confirmed; source logins and receiver observation remain unverified.
 
 Use exactly two bot tabs. In the Meet tab, select BlackHole explicitly with echo cancellation, noise suppression and automatic gain control disabled, camera off, and mute remote-audio elements. In the player tab, route HTMLMediaElements and AudioContexts, including future instances, to BlackHole with sink selection. Grant permissions only for the origins under test. Device IDs must be resolved within each origin; never fall back to the default microphone or default output.
 
@@ -185,7 +189,7 @@ Sequence operations and poll for the observed state before advancing; an HTTP su
 
 | Condition | Current disposition |
 | --- | --- |
-| E1 all permitted admission routes fail | Not triggered: Ask to join succeeded; other routes untested |
+| E1 all permitted admission routes fail | Not triggered: latest Ask to join host-confirmed; other routes untested; earlier result invalidated |
 | E2 Google session cannot persist | Not evaluated; no sign-in attempted |
 | E3 every source including local fails | Not evaluated end to end; driver and explicit input/output selection now verified |
 | E4/E5 failure | Not evaluated; nonfatal when actually measured |

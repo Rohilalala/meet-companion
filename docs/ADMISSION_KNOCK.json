@@ -15,7 +15,10 @@
     "prejoinMs": 4158,
     "admissionMs": 29660,
     "leftAfterAdmissionTest": true,
-    "hostObservation": "unobserved"
+    "hostObservation": "unobserved",
+    "classification": "INVALIDATED_FALSE_POSITIVE",
+    "ownerCorrection": "The owner reports this attempt was never admitted.",
+    "timingCaveat": "admissionMs is time to the old UI classification, not measured admission latency."
   },
   "blackHoleInput": {
     "selected": true,
@@ -29,5 +32,20 @@
     "audioPlayed": false
   },
   "receiverAudibility": null,
-  "failedDiagnostic": "An extra positional-tab probe failed before emitting results; discarded. Retried by exact tab origins and required init guards with explicit exact-device constraints."
+  "failedDiagnostic": "An extra positional-tab probe failed before emitting results; discarded. Retried by exact tab origins and required init guards with explicit exact-device constraints.",
+  "confirmedRetry": {
+    "observedAt": "2026-09-29T20:28:26.211Z",
+    "mode": "headless",
+    "askedToJoin": true,
+    "hostObservation": "admitted",
+    "botState": "in_call",
+    "admissionMs": null,
+    "initialMicrophoneOff": false,
+    "initialCameraOff": false,
+    "mediaCorrection": "A modal hid rendered controls from role selectors. Explicit OFF actions then verified both controls disabled. Camera source was the synthetic canvas; microphone source was BlackHole.",
+    "microphoneOffVerified": true,
+    "cameraOffVerified": true,
+    "audioPlayed": false,
+    "holdLimitMinutes": 10
+  }
 }

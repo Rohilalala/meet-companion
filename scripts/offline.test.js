@@ -3,8 +3,43 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
 import { Spotify, playbackBody } from '../controller/spotify.js';
-import { meetingURL } from '../controller/meet-driver.js';
+import { meetingURL, MeetDriver, selectors } from '../controller/meet-driver.js';
 import { meetInit } from '../controller/meet-init.js';
+
+test('Meet admission requires more than a leave button and respects waiting/terminal states', async () => {
+  let body = '', visible = new Set();
+  const element = key => ({ first() { return this; }, isVisible: async () => visible.has(key), innerText: async () => body });
+  const driver = new MeetDriver({ url: () => 'https://meet.google.com/abc-defg-hij', locator: element, getByRole: (_role, { name }) => element(name) });
+  visible = new Set([selectors.leave, selectors.leaveControl]);
+  assert.equal(await driver.state(), 'joining');
+  visible.add(selectors.meetingDetails);
+  assert.equal(await driver.state(), 'in_call');
+  for (const [text, expected] of [
+    ['Asking to be let in', 'awaiting_admission'],
+    ['Your request to join was denied', 'ADMISSION_DENIED'],
+    ["You've been removed", 'REMOVED'],
+    ['You left the meeting', 'MEETING_ENDED'],
+  ]) {
+    body = text;
+    assert.equal(await driver.state(), expected);
+  }
+});
+
+test('Meet media-off check handles controls hidden from accessibility and refuses unknown state', async () => {
+  const visible = new Set([selectors.cameraOffControl, selectors.muteControl]);
+  const pairs = new Map([[selectors.cameraOffControl, selectors.cameraOnControl], [selectors.muteControl, selectors.unmuteControl]]);
+  const driver = new MeetDriver({ locator: key => ({
+    first() { return this; },
+    isVisible: async () => visible.has(key),
+    evaluate: async action => action({ click() { visible.delete(key); visible.add(pairs.get(key)); } }),
+    waitFor: async () => { if (!visible.has(key)) throw new Error('fixture missing control'); },
+  }) });
+  await driver.disableMedia();
+  assert.deepEqual(visible, new Set([selectors.cameraOnControl, selectors.unmuteControl]));
+  await driver.disableMedia(); // Already off must not toggle back on.
+  visible.clear();
+  await assert.rejects(() => driver.disableMedia(), /MEDIA_OFF_UNVERIFIED/);
+});
 
 test('meeting and Spotify links reject lookalike origins and unsupported resources', () => {
   assert.equal(meetingURL('https://meet.google.com/abc-defg-hij?authuser=1'), 'https://meet.google.com/abc-defg-hij');

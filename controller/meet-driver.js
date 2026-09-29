@@ -5,6 +5,12 @@ export const selectors = {
   leave: /Leave call/i, join: /^(Join now|Ask to join)$/i,
   cameraOff: /Turn off camera/i, cameraOn: /Turn on camera/i,
   mute: /Turn off microphone/i, unmute: /Turn on microphone/i,
+  leaveControl: 'button[aria-label^="Leave call"]',
+  meetingDetails: 'button[aria-label="Meeting details"]',
+  cameraOffControl: 'button[aria-label^="Turn off camera"]',
+  cameraOnControl: 'button[aria-label^="Turn on camera"]',
+  muteControl: 'button[aria-label^="Turn off microphone"]',
+  unmuteControl: 'button[aria-label^="Turn on microphone"]',
   chat: /Chat with everyone|In-call messages|Chat with all/i,
   messageInput: 'textarea[aria-label*="message" i], [contenteditable="true"][role="textbox"]',
   send: /^Send( message)?$/i,
@@ -35,14 +41,27 @@ export class MeetDriver {
   }
   async state() {
     if (new URL(this.page.url()).hostname === 'accounts.google.com') return 'SIGNED_OUT(google)';
-    if (await this.page.getByRole('button', { name: selectors.leave }).first().isVisible().catch(() => false)) return 'in_call';
     const text = await this.page.locator('body').innerText().catch(() => '');
     if (/Sign in to join/i.test(text) || await this.page.locator(selectors.guestName).first().isVisible()) return 'SIGNED_OUT(google)';
     if (denied.test(text)) return 'ADMISSION_DENIED';
     if (removed.test(text)) return 'REMOVED';
     if (ended.test(text)) return 'MEETING_ENDED';
     if (/Asking to be let in|You'll join when someone lets you in|Wait for the host/i.test(text)) return 'awaiting_admission';
+    // A hang-up control alone is not evidence of admission. CSS locators also
+    // see rendered controls when a Meet modal hides them from accessibility.
+    if (await this.page.locator(selectors.leaveControl).first().isVisible() &&
+        await this.page.locator(selectors.meetingDetails).first().isVisible()) return 'in_call';
     return 'joining';
+  }
+  async disableMedia() {
+    try {
+      for (const [on, off] of [[selectors.muteControl, selectors.unmuteControl], [selectors.cameraOffControl, selectors.cameraOnControl]]) {
+        const button = this.page.locator(on).first();
+        // Only dispatch an OFF action; a modal must not silently skip it.
+        if (await button.isVisible()) await button.evaluate(button => button.click());
+        await this.page.locator(off).first().waitFor({ state: 'visible', timeout: 5000 });
+      }
+    } catch { throw new Error('MEDIA_OFF_UNVERIFIED'); }
   }
   async join(link, { timeout = 180000 } = {}) {
     await this.page.goto(meetingURL(link), { waitUntil: 'domcontentloaded' });
@@ -53,17 +72,17 @@ export class MeetDriver {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       stream.getTracks().forEach(track => track.stop());
     }).catch(() => { throw new Error('BLACKHOLE_INPUT_UNAVAILABLE'); });
-    for (const name of [selectors.cameraOff, selectors.mute]) {
-      const button = this.page.getByRole('button', { name }).first();
-      if (await button.isVisible()) await button.click();
-    }
+    await this.disableMedia();
     const button = this.page.getByRole('button', { name: selectors.join }).first();
     const asked = /Ask to join/i.test(await button.innerText());
     await button.click();
     const requestedAt = Date.now();
     while (Date.now() - requestedAt < timeout) {
       const state = await this.state();
-      if (state === 'in_call') return { state, askedToJoin: asked, prejoinMs: requestedAt - start, admissionMs: Date.now() - requestedAt };
+      if (state === 'in_call') {
+        await this.disableMedia();
+        return { state, evidence: 'bot-ui-only', askedToJoin: asked, prejoinMs: requestedAt - start, admissionMs: Date.now() - requestedAt };
+      }
       if (['ADMISSION_DENIED', 'REMOVED', 'MEETING_ENDED', 'SIGNED_OUT(google)'].includes(state)) throw new Error(state);
       await delay(300);
     }
@@ -74,15 +93,15 @@ export class MeetDriver {
     if (await button.isVisible()) await button.click();
     await this.page.getByRole('button', { name: selectors.mute }).first().waitFor({ timeout: 5000 }).catch(() => { throw new Error('MUTED_BY_HOST'); });
   }
-  async muted() { return this.page.getByRole('button', { name: selectors.unmute }).first().isVisible(); }
+  async muted() { return this.page.locator(selectors.unmuteControl).first().isVisible(); }
   async camera(on) {
     const button = this.page.getByRole('button', { name: on ? selectors.cameraOn : selectors.cameraOff }).first();
     if (await button.isVisible()) await button.click();
     await this.page.getByRole('button', { name: on ? selectors.cameraOff : selectors.cameraOn }).first().waitFor({ timeout: 5000 });
   }
   async leave() {
-    const button = this.page.getByRole('button', { name: selectors.leave }).first();
-    if (await button.isVisible()) await button.click();
+    const button = this.page.locator(selectors.leaveControl).first();
+    if (await button.isVisible()) await button.evaluate(button => button.click());
     await button.waitFor({ state: 'hidden', timeout: 5000 });
   }
   async openChat(onMessage = () => {}) {
