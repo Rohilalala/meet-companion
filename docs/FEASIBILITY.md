@@ -46,7 +46,7 @@ The first browser check exposed a serialization issue: Chrome's AudioSinkInfo do
 
 ## Owner-supplied meeting: pre-join check
 
-The owner supplied a test meeting during harness work. It was saved in ignored `config.local.json` with mode 0600; no meeting code is published here. The bot opened that meeting page with the init script and reported `state=joining`, `googleSession=unknown`, `admissionRequested=false`. This does not establish signed-in status, admission denial or timeout. The dedicated manual-login window was then opened for the owner; the harness did not enter credentials. Evidence: [PREJOIN.json](PREJOIN.json). BlackHole remains absent according to the last device check.
+The owner supplied a test meeting during harness work. It was saved in ignored `config.local.json` with mode 0600; no meeting code is published here. The bot opened that meeting page with the init script and reported `state=joining`, `googleSession=unknown`, `admissionRequested=false`. This does not establish signed-in status, admission denial or timeout. The dedicated manual-login window was then opened for the owner; the harness did not enter credentials. Evidence: [PREJOIN.json](PREJOIN.json). BlackHole remains absent in the final Node 22 recheck. That later check no longer reports a default aggregate; no system audio settings were changed by this harness. See [PREFLIGHT_CURRENT.json](PREFLIGHT_CURRENT.json); inspect defaults again before live audio tests.
 
 ## Required setup to resume
 

@@ -14,3 +14,8 @@ Use Node 22 and plain ESM. The login command must have no remote debugging, auto
 
 ## Last updated
 2026-09-30
+
+## Learnings
+
+### 2026-09-30 — Graceful CDP close and dead-PID profile locks
+After the first Chrome check, SingletonLock remained while its recorded process PID no longer existed; a blanket file-exists check refused the next launch. Use CDP Browser.close, wait for the spawned process to exit, refuse locks for live or foreign-host PIDs, and let Chrome recover its own dead-PID lock without deleting profile data. Repeated headless and windowed launches attached and closed successfully.
