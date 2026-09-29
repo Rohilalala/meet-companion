@@ -36,7 +36,7 @@ export function meetInit() {
     if (!constraints.audio && !constraints.video) throw new TypeError('MEDIA_CONSTRAINTS_REQUIRED');
     let stream = new MediaStream();
     if (constraints.audio) {
-      const input = (await enumerate()).find(device => device.kind === 'audioinput' && /^BlackHole 2ch$/i.test(device.label));
+      const input = (await enumerate()).find(device => device.kind === 'audioinput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(device.label));
       if (!input) { error = 'BLACKHOLE_2CH_MISSING'; throw new DOMException(error, 'NotFoundError'); }
       stream = await gum({ audio: { deviceId: { exact: input.deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
     }

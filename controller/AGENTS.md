@@ -14,3 +14,8 @@ Never capture protected playback into Web Audio or record meeting media. All ser
 
 ## Last updated
 2026-09-30
+
+## Learnings
+
+### 2026-09-30 — Chrome appends Virtual to BlackHole device labels
+After reboot, macOS preflight reported BlackHole 2ch but Chrome enumerateDevices labelled both input and output BlackHole 2ch (Virtual). The plain-name match blocked the first live attempt before requesting admission. Reproduced with the offline microphone fixture, then allowed only the exact optional (Virtual) suffix in both init scripts. All four tests pass. Live input settings select BlackHole with all three processing flags false; HTMLMediaElement and AudioContext sink IDs match BlackHole.

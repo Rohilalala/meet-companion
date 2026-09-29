@@ -1,0 +1,33 @@
+{
+  "recordedAt": "2026-09-29T20:20:29+00:00",
+  "experiment": "E1",
+  "mode": "headless",
+  "route": "knock",
+  "firstAttempt": {
+    "result": "BLACKHOLE_INPUT_UNAVAILABLE",
+    "admissionRequested": false,
+    "cause": "Browser device label is BlackHole 2ch (Virtual)"
+  },
+  "retry": {
+    "observedAt": "2026-09-29T20:17:26.278Z",
+    "state": "in_call",
+    "askedToJoin": true,
+    "prejoinMs": 4158,
+    "admissionMs": 29660,
+    "leftAfterAdmissionTest": true,
+    "hostObservation": "unobserved"
+  },
+  "blackHoleInput": {
+    "selected": true,
+    "echoCancellation": false,
+    "noiseSuppression": false,
+    "autoGainControl": false
+  },
+  "blackHoleOutput": {
+    "htmlMediaElement": true,
+    "audioContext": true,
+    "audioPlayed": false
+  },
+  "receiverAudibility": null,
+  "failedDiagnostic": "An extra positional-tab probe failed before emitting results; discarded. Retried by exact tab origins and required init guards with explicit exact-device constraints."
+}

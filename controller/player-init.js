@@ -9,7 +9,7 @@ export function playerInit() {
   let error = null;
   async function device() {
     const outputs = await navigator.mediaDevices.enumerateDevices();
-    const match = outputs.find(item => item.kind === 'audiooutput' && /^BlackHole 2ch$/i.test(item.label));
+    const match = outputs.find(item => item.kind === 'audiooutput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(item.label));
     if (!match) throw new Error('BLACKHOLE_2CH_MISSING');
     return match.deviceId;
   }

@@ -2,7 +2,7 @@
 
 Date: 2026-09-30 (Asia/Kolkata). Machine evidence timestamps are UTC.
 
-**Decision: PHASE 0 HARNESS BUILT; LIVE GATES BLOCKED ON SETUP. Stop before Phase 1.** No E0–E6 live admission/playback experiment has completed. A read-only pre-join check of the owner-supplied meeting was performed; no admission request was sent. No admission, session persistence, audible playback, camera quality, chat reliability, or Spotify control claim is established. Missing prerequisites are not failed experiments and do not establish that a fallback architecture is needed.
+**Decision: E1 ASK-TO-JOIN SUCCEEDED; REMAINING LIVE GATES UNPROVEN. Stop before Phase 1.** The bot requested admission to the owner-supplied meeting, reached in_call in headless branded Chrome, then left at the end of the admission test. No receiver-audible playback has been tested. Ask-to-join admission is established from the bot UI; host-side observation is pending. Five-relaunch session persistence, audible playback, receiver camera quality, chat reliability and Spotify control remain unproven. Missing prerequisites are not failed experiments and do not establish that a fallback architecture is needed.
 
 The original request is preserved in [BRIEF.md](BRIEF.md). The Phase 0 harness now includes a branded-Chrome launcher, both tab init scripts, localhost tone/beep/file player, camtest, minimal Meet driver, Spotify PKCE/device-targeted API calls, and E0–E6 runners. No Phase 1 extension, activity queue, or production session controller is implemented.
 
@@ -22,7 +22,7 @@ Recorded by `node scripts/preflight.js`: [PREFLIGHT.json](PREFLIGHT.json). The c
 | Syntax | PASS, 23 ESM files | `npm run check` under Node 22.23.3. |
 | Manual-login launch configuration | PASS | `npm run bot:login -- --dry-run`; actual browser launch and sign-in not tested. |
 
-No system audio settings were changed. No meeting was joined. No messages, audio, video, OAuth tokens, or account information were collected.
+The initial local checks changed no system audio settings and joined no meeting. The later E1 result is recorded below. No meeting media or chat was recorded.
 
 ## New local harness verification
 
@@ -48,10 +48,22 @@ The first browser check exposed a serialization issue: Chrome's AudioSinkInfo do
 
 The owner supplied a test meeting during harness work. It was saved in ignored `config.local.json` with mode 0600; no meeting code is published here. The bot opened that meeting page with the init script and reported `state=joining`, `googleSession=unknown`, `admissionRequested=false`. This does not establish signed-in status, admission denial or timeout. The dedicated manual-login window was then opened for the owner; the harness did not enter credentials. Evidence: [PREJOIN.json](PREJOIN.json). BlackHole remains absent in the final Node 22 recheck. That later check no longer reports a default aggregate; no system audio settings were changed by this harness. See [PREFLIGHT_CURRENT.json](PREFLIGHT_CURRENT.json); inspect defaults again before live audio tests.
 
+## Post-reboot admission and BlackHole verification
+
+Evidence: [PREFLIGHT_POST_REBOOT.json](PREFLIGHT_POST_REBOOT.json), [ADMISSION_KNOCK.json](ADMISSION_KNOCK.json).
+
+The owner installed BlackHole and restarted. Node 22 preflight now passes: BlackHole input/output exist, neither is the system default, no default aggregate needs review, and the bot profile was available. The owner reports manual Google sign-in and a host ready to admit.
+
+The first actual join attempt stopped before requesting admission because Chrome labels both devices `BlackHole 2ch (Virtual)`. The exact plain-name matcher incorrectly reported the device missing. The offline regression failed with that observed label, then passed after accepting the exact optional ` (Virtual)` suffix in both init scripts. No other audio device is accepted as a fallback.
+
+On retry in headless Chrome, the bot clicked Ask to join, spent **29,660 ms** waiting for admission, and reached `in_call`. Pre-join preparation took **4,158 ms**. The admission test then left automatically. Camera and microphone were off for entry. Host-side UI observation has not yet been supplied, so manual host admission versus automatic admission is not inferred.
+
+A separate non-playing check selected the tabs by exact origin and required their init guards. The actual audio input reported BlackHole's exact device ID with echoCancellation=false, noiseSuppression=false and autoGainControl=false. HTMLMediaElement and AudioContext sink IDs both matched BlackHole. No tone or service music was played, so this is device-selection evidence, not an E3 audibility pass. A preceding extra diagnostic used positional tab selection and failed before reporting results; it was discarded. The corrected diagnostic uses an explicit exact BlackHole constraint even behind the Meet override.
+
 ## Required setup to resume
 
-1. Install BlackHole 2ch and confirm it exposes both input and output. Keep macOS media output and system sounds away from BlackHole, including indirect routing through an aggregate/multi-output device. The preflight deliberately refuses to declare aggregate membership safe from its name alone.
-2. Create the dedicated bot Google account; use `npm run bot:login` and sign all four service accounts in manually. Fully close that dedicated Chrome instance before controlled relaunches.
+1. BlackHole installation and non-default input/output checks now pass. Keep the macOS output unchanged and recheck after future audio-device changes.
+2. Google sign-in is completed according to the owner, and a live bot admission succeeded. The three service-account logins and five-relaunch persistence checks still need verification. Fully close the bot login browser before controlled relaunches.
 3. The saved test meeting is now configured. Arrange its cooperating host, invite the bot to its Calendar event, and arrange a second meeting hosted by someone else. Do not publish meeting codes in this report.
 4. Arrange a second receiver device and two test participants. E4 additionally needs laptop/phone receiver configurations and the authorized filming conditions below.
 5. Prepare the owner's Spotify Premium account and development-mode app (PKCE redirect/scopes in README). Apple Music/YouTube Music subscriptions and usable test links are needed for their individual checks. Enter credentials locally, never in chat or tracked files.
@@ -62,13 +74,13 @@ All numerical result fields below are **not measured**. Fill them only from obse
 
 ### E0 — headless versus normal-window mode
 
-Status: **BLOCKED** (BlackHole, bot sign-in, test meeting, Spotify playback and receiver unavailable).
+Status: **PARTIAL**. Headless admission now passed in E1; Spotify playback and receiver audibility remain untested.
 
 Spawn branded Chrome with the dedicated non-default profile and fixed debugging port bound to loopback, attach using Playwright `connectOverCDP`, and use the exact flags in BRIEF.md. Do not use Playwright launch defaults, fake media, `--mute-audio`, or automation sign-in. Verify the actual debugging listener is loopback-only.
 
 | Required observation | Result |
 | --- | --- |
-| Headless bot admitted and visible as its own participant | Not run |
+| Headless bot admitted and visible as its own participant | Bot reached in_call in E1; host-side observation pending |
 | Official open.spotify.com player audibly playing | Not run |
 | Player output routed to BlackHole and heard on a second device | Not run |
 
@@ -76,12 +88,12 @@ Only all three passing establishes headless viability. Any observed failure choo
 
 ### E1 — admission
 
-Status: **BLOCKED** (authenticated bot session, BlackHole and host coordination unverified). Saved meeting link is configured; only the pre-join check above was run.
+Status: **ASK-TO-JOIN PASS from bot UI**. Invitee/member/external-host cases remain untested; host-side observation pending.
 
 | Route | Host UI seen | Bot UI seen | Time to admission/denial | Result |
 | --- | --- | --- | --- | --- |
 | (a) Saved meeting as Calendar invitee | Not observed | Not observed | Not measured | Not run |
-| (b) Saved meeting using Ask to join | Not observed | Not observed | Not measured | Not run |
+| (b) Saved meeting using Ask to join | Pending owner observation | Ask to join → in_call → left after test | 29,660 ms from click | Admitted |
 | (c) Meeting owned by someone else using Ask to join | Not observed | Not observed | Not measured | Not run |
 | `spaces.members` route if (a)/(b) cannot admit | Not observed | Not observed | Not measured | Not run |
 
@@ -109,7 +121,7 @@ If Google cannot persist, **STOP**. Report other services' signed-out states sep
 
 ### E3 — independent audio-route verification
 
-Status: **BLOCKED** (BlackHole, admission, source logins and receiver unavailable).
+Status: **NOT RUN END TO END**. BlackHole device selection and one admission now pass; source logins and receiver observation remain unverified.
 
 Use exactly two bot tabs. In the Meet tab, select BlackHole explicitly with echo cancellation, noise suppression and automatic gain control disabled, camera off, and mute remote-audio elements. In the player tab, route HTMLMediaElements and AudioContexts, including future instances, to BlackHole with sink selection. Grant permissions only for the origins under test. Device IDs must be resolved within each origin; never fall back to the default microphone or default output.
 
@@ -173,9 +185,9 @@ Sequence operations and poll for the observed state before advancing; an HTTP su
 
 | Condition | Current disposition |
 | --- | --- |
-| E1 all permitted admission routes fail | Not evaluated; no meeting attempted |
+| E1 all permitted admission routes fail | Not triggered: Ask to join succeeded; other routes untested |
 | E2 Google session cannot persist | Not evaluated; no sign-in attempted |
-| E3 every source including local fails | Not evaluated; driver absent |
+| E3 every source including local fails | Not evaluated end to end; driver and explicit input/output selection now verified |
 | E4/E5 failure | Not evaluated; nonfatal when actually measured |
 | Need DRM circumvention, protected capture/download or automated sign-in | None attempted or proposed |
 | Need recording of meeting media | Human-only E4 exception authorized with conditions above; bot recording remains forbidden |

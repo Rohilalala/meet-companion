@@ -67,14 +67,14 @@ test('Spotify mutations target only the selected web player; takeover and volume
 });
 
 test('Meet microphone override pins BlackHole, disables processing, and never falls back', async () => {
-  let available = true, captured;
+  let available = true, captured, label = 'BlackHole 2ch (Virtual)';
   class MediaStream { constructor() { this.tracks = []; } addTrack(track) { this.tracks.push(track); } }
   class MediaElement { play() {} }
   class Document { createElement() {} }
   class Element { attachShadow() {} }
   Object.defineProperty(MediaElement.prototype, 'muted', { configurable: true, get() { return this.silent ?? false; }, set(value) { this.silent = value; } });
   const mediaDevices = {
-    enumerateDevices: async () => available ? [{ kind: 'audioinput', label: 'BlackHole 2ch', deviceId: 'blackhole-fixture' }, { kind: 'videoinput', label: 'Real camera', deviceId: 'real-camera' }] : [],
+    enumerateDevices: async () => available ? [{ kind: 'audioinput', label, deviceId: 'blackhole-fixture' }, { kind: 'videoinput', label: 'Real camera', deviceId: 'real-camera' }] : [],
     getUserMedia: async constraints => { captured = constraints; return new MediaStream(); },
   };
   const context = {
@@ -87,6 +87,9 @@ test('Meet microphone override pins BlackHole, disables processing, and never fa
   assert.equal(captured.audio.deviceId.exact, 'blackhole-fixture');
   for (const name of ['echoCancellation', 'noiseSuppression', 'autoGainControl']) assert.equal(captured.audio[name], false);
   assert.equal(captured.video, false);
+  label = 'BlackHole 2ch';
+  await mediaDevices.getUserMedia({ audio: true });
+  assert.equal(captured.audio.deviceId.exact, 'blackhole-fixture');
   const devices = await mediaDevices.enumerateDevices();
   assert.equal(devices.filter(device => device.kind === 'videoinput').length, 1);
   assert.equal(devices.at(-1).label, 'Meet Companion Cam');
