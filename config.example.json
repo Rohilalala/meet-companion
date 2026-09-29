@@ -1,4 +1,19 @@
 {
   "chromePath": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
-  "userDataDir": ".local/chrome-bot"
+  "userDataDir": ".local/chrome-bot",
+  "port": 3210,
+  "debugPort": 9223,
+  "defaultAggregateReviewed": false,
+  "musicFolder": "",
+  "localFile": "",
+  "meetingLink": "",
+  "externalMeetingLink": "",
+  "spotifyClientId": "",
+  "spotifyDeviceId": "",
+  "spotifyLink": "",
+  "spotifyTrackLink": "",
+  "applemusicLink": "",
+  "youtubemusicLink": "",
+  "chatParticipants": [],
+  "chatClockOffsetsMs": [null, null]
 }

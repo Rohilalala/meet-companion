@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Meet Companion diagnostic player</title>
+<style>body{font:18px system-ui;max-width:720px;margin:60px auto;padding:24px;background:#131821;color:#f3f5f8}button{font:inherit;margin:6px;padding:12px}audio{display:block;margin:24px 0;width:100%}output{display:block;white-space:pre-wrap}</style>
+<h1>Meet Companion</h1><p>Phase 0 diagnostic player</p>
+<button id="tone">440 Hz · 60 seconds</button><button id="beep">1 kHz beep</button><button id="stop">Stop</button>
+<audio id="audio" controls></audio><output id="status">Ready</output>
+<script nonce="__NONCE__">
+const allowDefaultTone = __DEFAULT_ALLOWED__;
+const audio = document.querySelector('audio');
+const output = document.querySelector('output');
+let blobURL, timer, epoch, beeps = 0, maxDispatchLatenessMs = 0;
+function wav(frequency, seconds) {
+  const rate = 44100, count = Math.round(rate * seconds);
+  const bytes = new ArrayBuffer(44 + count * 2), view = new DataView(bytes);
+  const str = (offset, value) => [...value].forEach((char, i) => view.setUint8(offset + i, char.charCodeAt(0)));
+  str(0, 'RIFF'); view.setUint32(4, 36 + count * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+  view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+  str(36, 'data'); view.setUint32(40, count * 2, true);
+  for (let i = 0; i < count; i++) {
+    const envelope = Math.min(1, i / 220, (count - i - 1) / 220);
+    view.setInt16(44 + i * 2, Math.sin(2 * Math.PI * frequency * i / rate) * 6500 * envelope, true);
+  }
+  return new Blob([bytes], { type: 'audio/wav' });
+}
+function stop() { clearTimeout(timer); epoch = null; audio.pause(); audio.currentTime = 0; }
+async function routed(kind) {
+  if (allowDefaultTone && kind === 'tone') return;
+  if (!window.companionRoute) throw new Error('BLACKHOLE_ROUTING_REQUIRED');
+  await window.companionRoute.check();
+}
+async function source(blob) {
+  audio.pause();
+  if (blobURL) URL.revokeObjectURL(blobURL);
+  blobURL = URL.createObjectURL(blob); audio.src = blobURL;
+  await audio.play();
+}
+window.companionPlayer = {
+  async tone() { stop(); await routed('tone'); await source(wav(440, 60)); },
+  async beep() { stop(); await routed('beep'); await source(wav(1000, 0.1)); },
+  async file(id) { stop(); await routed('file'); audio.src = '/player?file=' + encodeURIComponent(id); await audio.play(); },
+  async camtest(startAt) {
+    stop(); await routed('beep'); epoch = startAt; beeps = 0; maxDispatchLatenessMs = 0;
+    if (blobURL) URL.revokeObjectURL(blobURL);
+    blobURL = URL.createObjectURL(wav(1000, 0.1)); audio.src = blobURL; audio.load();
+    const tick = async () => {
+      if (epoch === null) return;
+      const due = epoch + beeps * 2000;
+      maxDispatchLatenessMs = Math.max(maxDispatchLatenessMs, Date.now() - due);
+      audio.currentTime = 0;
+      try { await audio.play(); } catch { output.textContent = 'AUDIO_ROUTE_LOST'; stop(); return; }
+      beeps++;
+      timer = setTimeout(tick, Math.max(0, epoch + beeps * 2000 - Date.now()));
+    };
+    timer = setTimeout(tick, Math.max(0, startAt - Date.now()));
+  },
+  stop,
+  status() { return { paused: audio.paused, ended: audio.ended, currentTime: audio.currentTime, duration: Number.isFinite(audio.duration) ? audio.duration : null, readyState: audio.readyState, sinkSelected: !!audio.sinkId, diagnosticDefaultTone: allowDefaultTone, beeps, maxDispatchLatenessMs, mediaError: audio.error?.code ?? null }; },
+};
+for (const name of ['tone', 'beep', 'stop']) document.getElementById(name).onclick = async () => {
+  try { await window.companionPlayer[name](); output.textContent = name === 'stop' ? 'Stopped' : 'Playing'; }
+  catch { output.textContent = window.companionRoute?.status().error ?? 'BLACKHOLE_ROUTING_REQUIRED'; }
+};
+</script></html>

@@ -1,10 +1,10 @@
 # Phase 0 scripts
 
 ## Purpose
-Check local prerequisites and open a dedicated browser for manual login. These scripts do not implement a controller, join meetings, or play media.
+Run Phase 0 browser, routing and live experiment diagnostics. Live runners may join configured test meetings only when explicitly invoked with `--live`.
 
 ## Run / test
-From the repository root: `npm run check`, `npm run preflight`, `npm run bot:login`.
+From the repository root: `npm run check`, `npm run verify:offline`, `npm run verify:browser`, `npm run e0` through `npm run e6`.
 
 ## Debug
 Failures appear on stdout/stderr as prerequisite codes. Do not print Chrome output, private config values, cookies, or account details.

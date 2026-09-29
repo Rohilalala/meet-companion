@@ -1,7 +1,7 @@
-import { access, readFile, realpath } from 'node:fs/promises';
+import { access, readFile, realpath, readlink } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -35,10 +35,23 @@ export async function settings() {
   const chrome = await canonical(resolve(root, config.chromePath));
   if (!chrome.endsWith('/Google Chrome.app/Contents/MacOS/Google Chrome')) throw new Error('BRANDED_CHROME_REQUIRED');
   await access(chrome, constants.X_OK);
-  return { chrome, profile };
+  const port = config.port ?? 3210;
+  const debugPort = config.debugPort ?? 9223;
+  if (![port, debugPort].every(value => Number.isInteger(value) && value >= 1024 && value <= 65535) || port === debugPort) throw new Error('CONFIG_INVALID');
+  return { ...config, chrome, profile, port, debugPort };
 }
 
 export function requireRuntime() {
   if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('MACOS_ARM64_REQUIRED');
   if (process.versions.node.split('.')[0] !== '22') throw new Error('NODE_22_REQUIRED');
+}
+
+export async function assertProfileAvailable(profile) {
+  try {
+    const lock = await readlink(join(profile, 'SingletonLock'));
+    const pid = Number(lock.match(/-(\d+)$/)?.[1]);
+    if (!pid || lock.slice(0, lock.lastIndexOf('-')) !== hostname()) throw new Error('BOT_PROFILE_LOCKED_CLOSE_CHROME_FIRST');
+    try { process.kill(pid, 0); } catch (error) { if (error.code === 'ESRCH') return; throw error; }
+    throw new Error('BOT_PROFILE_LOCKED_CLOSE_CHROME_FIRST');
+  } catch (error) { if (error.code !== 'ENOENT') throw error; }
 }

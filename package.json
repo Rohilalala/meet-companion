@@ -3,10 +3,25 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": "22.x" },
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "preflight": "node scripts/preflight.js",
     "bot:login": "node scripts/bot-login.js",
-    "check": "node --check scripts/settings.js && node --check scripts/preflight.js && node --check scripts/bot-login.js"
+    "check": "node scripts/check.js",
+    "bot:launch": "node scripts/bot-launch.js",
+    "verify:offline": "node --test scripts/offline.test.js",
+    "verify:browser": "node scripts/verify-browser.js",
+    "e0": "node scripts/e0.js",
+    "e1": "node scripts/e1.js",
+    "e2": "node scripts/e2.js",
+    "e3": "node scripts/e3.js",
+    "e4": "node scripts/e4.js",
+    "e5": "node scripts/e5.js",
+    "e6": "node scripts/e6.js"
+  },
+  "dependencies": {
+    "playwright": "1.63.0"
   }
 }

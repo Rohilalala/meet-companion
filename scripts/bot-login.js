@@ -1,17 +1,11 @@
-import { lstat, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
-import { requireRuntime, settings } from './settings.js';
+import { requireRuntime, settings, assertProfileAvailable } from './settings.js';
 
 try {
   requireRuntime();
   const { chrome, profile } = await settings();
-  try {
-    await lstat(join(profile, 'SingletonLock'));
-    throw new Error('BOT_PROFILE_LOCKED_CLOSE_CHROME_FIRST');
-  } catch (error) {
-    if (error.code !== 'ENOENT') throw error;
-  }
+  await assertProfileAvailable(profile);
   const args = [
     `--user-data-dir=${profile}`,
     '--no-first-run',
