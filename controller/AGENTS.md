@@ -65,3 +65,11 @@ The devicechange handler unconditionally paused all players and never resumed th
 
 ### 2026-09-30 — Stop a Meet presentation through its UI before navigation
 Stopping the original display tracks left Meet showing You are presenting and exposed the diagnostic page when the tab navigated. Click You are presenting then Stop presenting and verify that indicator disappears before changing the player page. The live UI cleared, repeated live video requests subsequently reached STARTED, and an offline regression prevents navigation if stop verification fails.
+
+
+### 2026-09-30 — Chrome disk-caches direct googlevideo audio
+Playing a yt-dlp-resolved googlevideo URL in /player wrote about 4 MB of audio per play into the bot profile's HTTP disk cache, and CDP Network.setCacheDisabled on the player tab did not prevent it. Serve media only through a local route with Cache-Control: no-store (/stream/<id>); a 40 s run then left no stream entry. Check with find on .local/chrome-bot/Default/Cache for files newer than a marker.
+
+
+### 2026-09-30 — pgrep -x cannot see yt-dlp
+Homebrew yt-dlp runs under Python, so pgrep -x yt-dlp reported 0 while a stream child was alive. Use pgrep -f 'yt-dlp .*--no-playlist' when checking for leftover children.
