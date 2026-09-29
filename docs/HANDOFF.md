@@ -10,6 +10,23 @@ The owner confirmed that the same YouTube link plays normally beyond the first m
 
 **The current runtime does not reliably include the latest saved YouTube changes.** It predates the final `object-fit: contain` and already-fullscreen guard edits. Those edits pass static checks, but have not been accepted in a live receiver test.
 
+## Update 2026-09-30 22:40 UTC — YouTube audio via yt-dlp
+
+Measured only; live Meet acceptance has **not** run.
+
+- **State now:** the live bot from "Live processes left running" was stopped with SIGINT; ports 3210 and 9223 are free. The leftover diagnostic process 24493 was stopped. The dirty work listed under "Dirty work to preserve" is committed as `4d2785c` (snapshot, unchanged); the yt-dlp work follows in `554e46d`, `8a2f9fc`, `b0cfdfe`, `c595e4a` and `3b7c64f`.
+- **YouTube web player in the bot profile, outside Meet** (numbers from controlled runs): windowed with routing reached 4 s, then paused, with 6 googlevideo 403s. Windowed without routing reached 31 s, then paused, with 12 googlevideo 403s. So neither headless mode nor the routing script explains the failure. A same-profile run with no CDP client attached was attempted and produced no result (the test Chrome ended with zero tabs). The cause is still unproven.
+- **New route:** `/bot youtube|yt|ytmusic|youtube-music <link>`, plain YouTube links and `/bot yt <search>` play audio through anonymous yt-dlp (`--ignore-config --no-cookies --no-cookies-from-browser --no-cache-dir --no-playlist -f bestaudio`). `/bot ytvideo <link>` keeps the native tab share unchanged. yt-dlp 2026.08.19 (Homebrew).
+- **Local results without Meet** (bot profile, headless, `/player` routed to BlackHole):
+  - Anonymous resolve of the test link succeeded in 2.9 s (webm).
+  - Direct googlevideo URL: `currentTime` advanced 10 s per 10 s sample for 180 s, with no pause or error.
+  - Stdout stream: advanced 10 s per 10 s for 60 s, and again for 40 s through the real `harness()`.
+  - After stop, zero yt-dlp processes remained (checked with `pgrep -f`; `pgrep -x` cannot see it because it runs under Python).
+- **Disk-cache finding:** playing the direct googlevideo URL wrote about 4 MB of audio per play into `.local/chrome-bot/Default/Cache`. `Network.setCacheDisabled` did not prevent it. The route therefore always plays the local `/stream/<id>` (`Cache-Control: no-store`); a 40 s run left no stream entry in the cache. The earlier cached googlevideo entries (from these tests) are still in the bot profile's cache and await the owner's OK to delete.
+- **Audio preflight:** `requireAudio` currently refuses with `DEFAULT_AGGREGATE_REVIEW_REQUIRED`, because the system-sounds device is a Multi-Output Device. Read-only inspection of `/Library/Preferences/Audio/com.apple.audio.SystemSettings.plist` lists its subdevices as MacBook Pro Speakers plus one other UID, with no BlackHole. Setting `defaultAggregateReviewed` is the owner's decision.
+- **Checks:** `npm run check` passes (31 files) and `npm run verify:offline` passes 17/17, including the argument, error-code, parser and single-use-id tests.
+- **Not yet done:** live acceptance items 1–5 from the task (3 minutes audible in Meet, controls, search, Spotify regression, final guardrail sweep in a live run).
+
 ## Repository and instructions
 
 - Actual repository: `/Users/adityarohilla/Documents/meet-companion`.
