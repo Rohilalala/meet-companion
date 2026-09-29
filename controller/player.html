@@ -39,6 +39,7 @@ async function source(blob) {
 window.companionPlayer = {
   async tone() { stop(); await routed('tone'); await source(wav(440, 60)); },
   async beep() { stop(); await routed('beep'); await source(wav(1000, 0.1)); },
+  async url(src) { stop(); await routed('file'); audio.src = src; await audio.play(); },
   async file(id) { stop(); await routed('file'); audio.src = '/player?file=' + encodeURIComponent(id); await audio.play(); },
   async camtest(startAt) {
     stop(); await routed('beep'); epoch = startAt; beeps = 0; maxDispatchLatenessMs = 0;

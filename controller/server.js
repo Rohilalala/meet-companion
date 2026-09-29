@@ -3,10 +3,14 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { createReadStream } from 'node:fs';
 import { join, extname, sep } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { oneTimeIds, stream } from './ytdlp.js';
 
 export async function startServer({ port = 3210, musicFolder, extensionId, allowDefaultTone = false, callback = async () => ({ status: 400, text: 'No authorization pending.' }) } = {}) {
   const token = randomBytes(32).toString('hex');
   const files = new Map();
+  const streams = oneTimeIds(), children = new Set();
+  const stopStreams = () => { children.forEach(child => child.kill('SIGKILL')); children.clear(); };
+  process.on('exit', stopStreams);
   const template = await readFile(new URL('./player.html', import.meta.url), 'utf8');
   const origin = `http://127.0.0.1:${port}`;
   const extensionOrigin = /^[a-p]{32}$/.test(extensionId ?? '') ? `chrome-extension://${extensionId}` : null;
@@ -29,6 +33,17 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
         const result = await callback(url);
         return send(result.status, result.text);
       }
+      if (url.pathname.startsWith('/stream/')) {
+        if (request.headers['sec-fetch-site'] === 'cross-site' || (request.headers.origin && request.headers.origin !== origin)) return send(403, 'ORIGIN_REFUSED');
+        const entry = streams.take(url.pathname.slice(8));
+        if (!entry) return send(404, 'MEDIA_UNAVAILABLE');
+        const child = stream(entry.target); children.add(child);
+        const end = () => { child.kill('SIGKILL'); children.delete(child); };
+        child.on('error', () => { end(); response.destroy(); }); child.on('close', () => children.delete(child));
+        response.on('close', end);
+        response.writeHead(200, { 'Content-Type': entry.ext === 'webm' ? 'audio/webm' : 'audio/mp4' });
+        child.stdout.pipe(response); return;
+      }
       if (url.pathname === '/player') {
         if (request.headers['sec-fetch-site'] === 'cross-site' || (request.headers.origin && request.headers.origin !== origin)) return send(403, 'ORIGIN_REFUSED');
         const file = files.get(url.searchParams.get('file'));
@@ -48,7 +63,7 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
           stream.on('error', () => response.destroy()); response.on('close', () => stream.destroy()); stream.pipe(response); return;
         }
         const nonce = randomBytes(18).toString('base64');
-        response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; media-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'`);
+        response.setHeader('Content-Security-Policy', `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; media-src 'self' blob: https://*.googlevideo.com; connect-src 'self'; frame-ancestors 'none'`);
         response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         response.end(template.replace('__NONCE__', nonce).replace('__DEFAULT_ALLOWED__', String(allowDefaultTone))); return;
       }
@@ -72,6 +87,8 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
       if (!type) throw new Error('MEDIA_UNAVAILABLE');
       const id = randomBytes(16).toString('hex'); files.set(id, { path, type }); return id;
     },
-    async close() { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); },
+    streamOnce(target, ext) { return streams.add({ target, ext }); },
+    stopStreams,
+    async close() { stopStreams(); process.removeListener('exit', stopStreams); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); },
   };
 }

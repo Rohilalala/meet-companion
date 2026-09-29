@@ -39,6 +39,10 @@ try {
   report.blockers.push('AUDIO_DEVICES_UNKNOWN');
 }
 
+// Optional YouTube audio route: report only, never blocks the other prerequisites.
+try { report.ytDlp = execFileSync('yt-dlp', ['--version'], { encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'ignore'] }).trim(); }
+catch { report.ytDlp = 'YTDLP_MISSING'; }
+
 report.localPrerequisitesReady = report.blockers.length === 0;
 report.liveExperimentsReady = false;
 report.ownerSetupRequired = ['Dedicated bot accounts signed in by hand', 'Test meeting and cooperating hosts', 'Second receiver device', 'Spotify development app and Premium access'];
