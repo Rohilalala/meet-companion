@@ -1,0 +1,26 @@
+{
+  "checkedAt": "2026-09-29T19:31:55.451Z",
+  "scope": "Local prerequisites only; no E0–E6 experiment was executed",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "node": "22.23.3",
+  "blockers": [
+    "BLACKHOLE_2CH_MISSING",
+    "DEFAULT_AGGREGATE_MEMBERSHIP_REQUIRES_MANUAL_REVIEW"
+  ],
+  "chromeVersion": "154.0.8037.58",
+  "dedicatedProfilePath": true,
+  "blackHoleInput": false,
+  "blackHoleOutput": false,
+  "blackHoleIsDefault": false,
+  "defaultOutputKnown": true,
+  "defaultAggregateNeedsReview": true,
+  "localPrerequisitesReady": false,
+  "liveExperimentsReady": false,
+  "ownerSetupRequired": [
+    "Dedicated bot accounts signed in by hand",
+    "Test meeting and cooperating hosts",
+    "Second receiver device",
+    "Spotify development app and Premium access"
+  ]
+}
