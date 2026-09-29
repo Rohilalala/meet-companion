@@ -7,6 +7,7 @@
     "node": "22.x"
   },
   "scripts": {
+    "bot": "node scripts/bot-run.js",
     "preflight": "node scripts/preflight.js",
     "bot:login": "node scripts/bot-login.js",
     "check": "node scripts/check.js",
@@ -14,6 +15,7 @@
     "verify:offline": "node --test scripts/offline.test.js",
     "verify:browser": "node scripts/verify-browser.js",
     "verify:meet-silence": "node scripts/verify-meet-silence.js",
+    "verify:presentation": "node scripts/verify-presentation.js",
     "e0": "node scripts/e0.js",
     "e1": "node scripts/e1.js",
     "e2": "node scripts/e2.js",

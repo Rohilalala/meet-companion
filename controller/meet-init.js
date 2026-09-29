@@ -8,6 +8,13 @@ export function meetInit() {
   canvas.width = 1280; canvas.height = 720;
   const ctx = canvas.getContext('2d');
   let frame = 0, epoch = null, error = null;
+  const inputs = new Set();
+  const peers = new Set(), NativePeer = window.RTCPeerConnection;
+  if (NativePeer) window.RTCPeerConnection = new Proxy(NativePeer, { construct(Target, args) {
+    const peer = Reflect.construct(Target, args); peers.add(peer);
+    peer.addEventListener('connectionstatechange', () => { if (peer.connectionState === 'closed') peers.delete(peer); });
+    return peer;
+  } });
   function draw() {
     const elapsed = Date.now() - (epoch ?? Date.now());
     const flash = epoch !== null && elapsed >= 0 && elapsed % 2000 < 100;
@@ -39,6 +46,16 @@ export function meetInit() {
       const input = (await enumerate()).find(device => device.kind === 'audioinput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(device.label));
       if (!input) { error = 'BLACKHOLE_2CH_MISSING'; throw new DOMException(error, 'NotFoundError'); }
       stream = await gum({ audio: { deviceId: { exact: input.deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+      for (const track of stream.getAudioTracks()) {
+        const apply = track.applyConstraints.bind(track);
+        track.applyConstraints = constraints => apply({
+          ...constraints, deviceId: { exact: input.deviceId },
+          echoCancellation: false, noiseSuppression: false, autoGainControl: false,
+          ...(constraints?.advanced ? { advanced: constraints.advanced.map(item => ({ ...item, echoCancellation: false, noiseSuppression: false, autoGainControl: false })) } : {}),
+        });
+        inputs.add(track);
+        track.addEventListener('ended', () => inputs.delete(track), { once: true });
+      }
     }
     if (constraints.video) stream.addTrack(camera());
     return stream;
@@ -88,8 +105,27 @@ export function meetInit() {
     if (window.webkitAudioContext) window.webkitAudioContext = SilentContext;
   }
   window.meetCompanion = {
+    senderParameters() {
+      return [...peers].flatMap(peer => peer.getSenders().filter(sender => sender.track?.kind === 'video').map(sender => {
+        const parameters = sender.getParameters();
+        return { contentHint: sender.track.contentHint, degradationPreference: parameters.degradationPreference, encodings: parameters.encodings?.map(value => ({ active: value.active, maxFramerate: value.maxFramerate, maxBitrate: value.maxBitrate, scaleResolutionDownBy: value.scaleResolutionDownBy })) };
+      }));
+    },
+    async sendStats() {
+      const observations = [];
+      for (const peer of peers) {
+        if (peer.signalingState === 'closed') continue;
+        const stats = await peer.getStats();
+        stats.forEach(value => {
+          if (value.type !== 'outbound-rtp' || value.kind !== 'video') return;
+          observations.push({ framesPerSecond: value.framesPerSecond, width: value.frameWidth, height: value.frameHeight, framesEncoded: value.framesEncoded, totalEncodeTime: value.totalEncodeTime, bytesSent: value.bytesSent, qualityLimitationReason: ['none', 'cpu', 'bandwidth', 'other'].includes(value.qualityLimitationReason) ? value.qualityLimitationReason : null });
+        });
+      }
+      return observations;
+    },
     camtest(startAt = Date.now() + 1000) { epoch = startAt; return { width: canvas.width, height: canvas.height, requestedFps: 30, epoch }; },
     stopCamtest() { epoch = null; },
+    inputSettings() { return [...inputs].filter(track => track.readyState === 'live').map(track => { const settings = track.getSettings(); return { echoCancellation: settings.echoCancellation, noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl, sampleRate: settings.sampleRate, channelCount: settings.channelCount }; }); },
     status() { return { canvasWidth: canvas.width, canvasHeight: canvas.height, diagnostic: epoch !== null, framesDrawn: frame, error }; },
   };
 }

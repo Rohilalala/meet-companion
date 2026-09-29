@@ -3,8 +3,139 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { runInNewContext } from 'node:vm';
 import { Spotify, playbackBody } from '../controller/spotify.js';
-import { meetingURL, MeetDriver, selectors } from '../controller/meet-driver.js';
+import { meetingURL, MeetDriver, selectors, observeMeetChat } from '../controller/meet-driver.js';
 import { meetInit } from '../controller/meet-init.js';
+import { playerInit } from '../controller/player-init.js';
+import { playback } from '../controller/playback.js';
+import { presentationInit } from '../controller/presentation-init.js';
+import { parseBotCommand, ChatBot } from '../controller/bot-command.js';
+test('/bot distinguishes music from YouTube presentation and rejects lookalikes', () => {
+  const cases = [
+    ['https://open.spotify.com/track/fixture123?si=test', 'spotify', 'music'],
+    ['https://music.apple.com/us/album/test/123?i=456', 'applemusic', 'music'],
+    ['https://music.youtube.com/watch?v=abcdefghijk', 'youtubemusic', 'music'],
+    ['https://youtu.be/abcdefghijk', 'youtube', 'presentation'],
+    ['https://www.youtube.com/shorts/abcdefghijk', 'youtube', 'presentation'],
+  ];
+  for (const [link, service, mode] of cases) {
+    for (const text of ['/bot ' + link, '/bot "' + link + '"']) {
+      const command = parseBotCommand(text); assert.equal(command.service, service); assert.equal(command.mode, mode);
+    }
+  }
+  assert.equal(parseBotCommand('ordinary chat'), null);
+  for (const text of ['/bot https://youtube.com.evil.test/watch?v=abcdefghijk', '/bot https://evil.test@youtube.com/watch?v=abcdefghijk', '/bot http://youtu.be/abcdefghijk', '/bot https://youtu.be/abcdefghijk extra', '/bot https://music.apple.com/us/browse']) assert.throws(() => parseBotCommand(text));
+  for (const action of ['pause', 'resume', 'stop', 'mute', 'unmute', 'help']) assert.deepEqual(parseBotCommand('/bot ' + action), { action });
+  assert.deepEqual(parseBotCommand('/bot'), { action: 'help' });
+  assert.deepEqual(parseBotCommand('/bot play'), { action: 'resume' });
+  assert.equal(parseBotCommand('/bot play spotify https://open.spotify.com/track/fixture123').service, 'spotify');
+  assert.equal(parseBotCommand('/bot youtube “https://youtu.be/abcdefghijk”').mode, 'presentation');
+  assert.throws(() => parseBotCommand('/bot spotify https://youtu.be/abcdefghijk'), /BOT_SERVICE_LINK_MISMATCH/);
+});
+
+test('chat playback serializes source changes, stops on failure, and never reports links', async () => {
+  const events = [], reports = [];
+  const bot = new ChatBot({
+    stop: async () => events.push('stop'),
+    playMusic: async ({ service }) => { events.push(service); throw new Error('PLAYBACK_NOT_STARTED'); },
+    playVideo: async () => events.push('youtube'),
+    report: result => reports.push(result),
+  });
+  bot.receive({ text: '/bot https://open.spotify.com/track/fixture123' });
+  await bot.receive({ text: '/bot https://youtu.be/abcdefghijk' });
+  assert.deepEqual(events, ['stop', 'spotify', 'stop', 'stop', 'youtube']);
+  assert.deepEqual(reports.map(report => report.result), ['ERROR', 'STARTED']);
+  assert.equal(JSON.stringify(reports).includes('https'), false);
+  await bot.close();
+  await bot.receive({ text: '/bot https://youtu.be/abcdefghijk' });
+  assert.equal(events.at(-1), 'stop'); assert.equal(events.length, 6);
+});
+
+test('chat ignores rebuilt message nodes but accepts a new message with the same text', () => {
+  let onMutation;
+  const received = [];
+  const message = (id, text) => ({
+    getAttribute: name => name === 'data-message-id' ? id : null,
+    closest: () => null, matches: () => false,
+    querySelector: selector => selector === selectors.messageText ? { textContent: text } : null,
+  });
+  let nodes = [message('history', '/bot pause')];
+  const context = {
+    window: { companionChatMessage: async value => received.push(value.text) },
+    document: { querySelectorAll: () => nodes }, selectors,
+    MutationObserver: class { constructor(callback) { onMutation = callback; } observe() {} disconnect() {} },
+  };
+  runInNewContext(`(${observeMeetChat.toString()})(selectors)`, context);
+  nodes.push(message('new', '/bot play')); onMutation();
+  assert.deepEqual(received, ['/bot play']);
+  nodes = [message('history', '/bot pause'), message('new', '/bot play')]; onMutation();
+  assert.deepEqual(received, ['/bot play']);
+  nodes.push(message('another', '/bot play')); onMutation();
+  assert.deepEqual(received, ['/bot play', '/bot play']);
+});
+
+test('pause, resume, mute and help dispatch without replacing the current source', async () => {
+  const events = [];
+  const bot = new ChatBot({
+    stop: async () => events.push('stop'), playMusic: async () => events.push('play'), playVideo: async () => events.push('video'),
+    pause: async () => events.push('pause'), resume: async () => events.push('resume'),
+    mute: async value => events.push(value ? 'mute' : 'unmute'), help: async () => events.push('help'), report() {},
+  });
+  for (const action of ['pause', 'resume', 'mute', 'unmute', 'help', 'stop']) await bot.receive({ text: '/bot ' + action });
+  assert.deepEqual(events, ['pause', 'resume', 'mute', 'unmute', 'help', 'stop']);
+});
+
+test('player controls include detached audio, preserve repeated pauses, and refuse missing routes', async () => {
+  let available = true, deviceChange;
+  class MediaElement {
+    constructor(tagName = 'VIDEO') { Object.assign(this, { tagName, isConnected: false, paused: true, ended: false, currentTime: 10, readyState: 4 }); }
+    pause() { this.paused = true; }
+    async play() { this.paused = false; }
+    async setSinkId(id) {
+      if (this.switching) throw new DOMException('Overlapping switch', 'AbortError');
+      this.switching = true; await Promise.resolve(); this.sinkId = id; this.switching = false;
+    }
+  }
+  Object.defineProperty(MediaElement.prototype, 'muted', { configurable: true, get() { return this.silent ?? false; }, set(value) { this.silent = value; } });
+  class Document { createElement(tag) { return new MediaElement(tag.toUpperCase()); } }
+  class Element { attachShadow() {} }
+  class AudioContext {
+    constructor() { this.state = 'suspended'; }
+    async setSinkId() { if (this.state === 'closed') throw new Error('CLOSED'); }
+    async resume() { this.state = 'running'; }
+    async suspend() { this.state = 'suspended'; }
+    async close() { this.state = 'closed'; }
+  }
+  const document = new Document();
+  Object.assign(document, { querySelectorAll: () => [], addEventListener() {} });
+  const context = {
+    window: { Audio: MediaElement, AudioContext }, document, Document, Element, HTMLMediaElement: MediaElement,
+    MutationObserver: class { observe() {} },
+    navigator: { mediaDevices: { addEventListener(_name, callback) { deviceChange = callback; }, enumerateDevices: async () => available ? [{ kind: 'audiooutput', label: 'BlackHole 2ch', deviceId: 'fixture' }] : [] } },
+  };
+  runInNewContext(`(${playerInit.toString()})()`, context);
+  const audio = new context.window.Audio(), video = document.createElement('video');
+  video.isConnected = true;
+  await Promise.all([audio.play(), audio.play(), video.play()]);
+  const route = context.window.companionRoute;
+  assert.equal(document.querySelectorAll().length, 0); // The fixture DOM query omits the detached song player.
+  assert.equal(route.positions({ detachedOnly: true }).length, 1);
+  await route.pause({ detachedOnly: true }); await route.pause({ detachedOnly: true });
+  assert.equal(audio.paused, true); assert.equal(video.paused, true);
+  await route.resume();
+  assert.equal(audio.paused, false); assert.equal(video.paused, true);
+  assert.equal(audio.sinkId, 'fixture');
+  const closedContext = new context.window.AudioContext();
+  await closedContext.resume(); await closedContext.close();
+  deviceChange(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(route.status().error, null);
+  assert.equal(audio.paused, false); // A harmless device notification must not stop music.
+  await route.pause({ detachedOnly: true }); available = false;
+  await assert.rejects(() => route.resume(), /BLACKHOLE_2CH_MISSING/);
+  assert.equal(audio.paused, true);
+  deviceChange(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(route.status().error, 'BLACKHOLE_2CH_MISSING');
+  assert.equal(audio.muted, true);
+});
 
 test('Meet admission requires more than a leave button and respects waiting/terminal states', async () => {
   let body = '', visible = new Set();
@@ -25,6 +156,52 @@ test('Meet admission requires more than a leave button and respects waiting/term
   }
 });
 
+test('stopping uses Meet presentation UI and never navigates while a share remains active', async () => {
+  let presenting = true, menu = false, tracksStopped = false;
+  const driver = new MeetDriver({
+    locator: () => ({ isVisible: async () => presenting, click: async () => { menu = true; }, waitFor: async () => assert.equal(presenting, false) }),
+    getByRole: () => ({ isVisible: async () => menu, click: async () => { assert.equal(menu, true); presenting = false; } }),
+    evaluate: async () => { tracksStopped = true; },
+  });
+  await driver.stopPresenting();
+  assert.equal(presenting, false); assert.equal(tracksStopped, true);
+  let navigated = false;
+  const actions = playback({ driver: { disableMedia: async () => {}, stopPresenting: async () => { throw new Error('PRESENTATION_STOP_UNVERIFIED'); } }, player: { goto: async () => { navigated = true; } }, server: { origin: 'http://127.0.0.1:3210' } });
+  await assert.rejects(() => actions.stop(), /PRESENTATION_STOP_UNVERIFIED/);
+  assert.equal(navigated, false);
+});
+
+test('presentation enforces tab audio, motion, bounded resolution and safe cloning', async () => {
+  class Track {
+    constructor() { this.kind = 'video'; this.readyState = 'live'; this.calls = 0; this.settings = { displaySurface: 'browser', width: 3840, height: 2160 }; }
+    get contentHint() { return this.hint; } set contentHint(value) { this.hint = value; }
+    getSettings() { return this.settings; }
+    async applyConstraints(value) { this.calls++; this.constraints = value; this.settings.width = value.width.max; this.settings.height = value.height.max; this.settings.frameRate = value.frameRate.max; }
+    clone() { const copy = new Track(); copy.settings = { ...this.settings }; return copy; }
+    stop() { this.readyState = 'ended'; }
+  }
+  const video = new Track(), audio = { readyState: 'live', enabled: true, stop() { this.readyState = 'ended'; } };
+  const stream = { getVideoTracks: () => [video], getAudioTracks: () => [audio], getTracks: () => [video, audio] };
+  const context = { window: {}, MediaStreamTrack: Track, DOMException, navigator: { mediaDevices: { getDisplayMedia: async () => stream } } };
+  runInNewContext(`(${presentationInit.toString()})()`, context);
+  await assert.rejects(() => context.navigator.mediaDevices.getDisplayMedia(), /PRESENTATION_NOT_ARMED/);
+  context.window.companionPresentation.arm(); await context.navigator.mediaDevices.getDisplayMedia();
+  assert.equal(video.contentHint, 'motion'); assert.equal(video.getSettings().width, 1280);
+  const copy = video.clone();
+  assert.equal(copy.calls, 0); // Configuring a clone must not race the consumer's applyConstraints.
+  copy.contentHint = 'detail';
+  await copy.applyConstraints({ frameRate: 5, width: 3840, advanced: [{ width: { exact: 3840 } }] });
+  assert.equal(copy.contentHint, 'motion'); assert.equal(copy.getSettings().frameRate, 30);
+  assert.equal(copy.getSettings().width, 1280); assert.equal(copy.constraints.advanced, undefined);
+  video.stop(); assert.equal(context.window.companionPresentation.status().active, true);
+  context.window.companionPresentation.stop(); assert.equal(copy.readyState, 'ended');
+  const rejectedVideo = new Track(); rejectedVideo.settings.displaySurface = 'window';
+  stream.getVideoTracks = () => [rejectedVideo]; stream.getTracks = () => [rejectedVideo, audio];
+  context.window.companionPresentation.arm();
+  await assert.rejects(() => context.navigator.mediaDevices.getDisplayMedia(), /PRESENTATION_TAB_AUDIO_REQUIRED/);
+  assert.equal(rejectedVideo.readyState, 'ended');
+});
+
 test('Meet media-off check handles controls hidden from accessibility and refuses unknown state', async () => {
   const visible = new Set([selectors.cameraOffControl, selectors.muteControl]);
   const pairs = new Map([[selectors.cameraOffControl, selectors.cameraOnControl], [selectors.muteControl, selectors.unmuteControl]]);
@@ -32,7 +209,7 @@ test('Meet media-off check handles controls hidden from accessibility and refuse
     first() { return this; },
     isVisible: async () => visible.has(key),
     evaluate: async action => action({ click() { visible.delete(key); visible.add(pairs.get(key)); } }),
-    waitFor: async () => { if (!visible.has(key)) throw new Error('fixture missing control'); },
+    waitFor: async () => { if (!key.split(', ').some(selector => visible.has(selector))) throw new Error('fixture missing control'); },
   }) });
   await driver.disableMedia();
   assert.deepEqual(visible, new Set([selectors.cameraOnControl, selectors.unmuteControl]));
@@ -103,14 +280,16 @@ test('Spotify mutations target only the selected web player; takeover and volume
 
 test('Meet microphone override pins BlackHole, disables processing, and never falls back', async () => {
   let available = true, captured, label = 'BlackHole 2ch (Virtual)';
-  class MediaStream { constructor() { this.tracks = []; } addTrack(track) { this.tracks.push(track); } }
+  class MediaStream { constructor() { this.tracks = []; } addTrack(track) { this.tracks.push(track); } getAudioTracks() { return this.tracks.filter(track => track.kind === 'audio'); } }
   class MediaElement { play() {} }
   class Document { createElement() {} }
   class Element { attachShadow() {} }
   Object.defineProperty(MediaElement.prototype, 'muted', { configurable: true, get() { return this.silent ?? false; }, set(value) { this.silent = value; } });
+  let reapplied;
+  const inputTrack = { kind: 'audio', readyState: 'live', addEventListener() {}, getSettings() { return reapplied ?? captured.audio; }, async applyConstraints(value) { reapplied = value; } };
   const mediaDevices = {
     enumerateDevices: async () => available ? [{ kind: 'audioinput', label, deviceId: 'blackhole-fixture' }, { kind: 'videoinput', label: 'Real camera', deviceId: 'real-camera' }] : [],
-    getUserMedia: async constraints => { captured = constraints; return new MediaStream(); },
+    getUserMedia: async constraints => { captured = constraints; const stream = new MediaStream(); stream.addTrack(inputTrack); return stream; },
   };
   const context = {
     window: { Audio: MediaElement }, navigator: { mediaDevices }, MediaStream, HTMLMediaElement: MediaElement, DOMException, Document, Element,
@@ -122,6 +301,11 @@ test('Meet microphone override pins BlackHole, disables processing, and never fa
   assert.equal(captured.audio.deviceId.exact, 'blackhole-fixture');
   for (const name of ['echoCancellation', 'noiseSuppression', 'autoGainControl']) assert.equal(captured.audio[name], false);
   assert.equal(captured.video, false);
+  await inputTrack.applyConstraints({ echoCancellation: true, noiseSuppression: true, autoGainControl: true, advanced: [{ echoCancellation: true }] });
+  for (const key of ['echoCancellation', 'noiseSuppression', 'autoGainControl']) {
+    assert.equal(reapplied[key], false); assert.equal(reapplied.advanced[0][key], false);
+  }
+  assert.equal(reapplied.deviceId.exact, 'blackhole-fixture');
   label = 'BlackHole 2ch';
   await mediaDevices.getUserMedia({ audio: true });
   assert.equal(captured.audio.deviceId.exact, 'blackhole-fixture');

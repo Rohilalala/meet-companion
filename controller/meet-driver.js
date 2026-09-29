@@ -12,10 +12,20 @@ export const selectors = {
   muteControl: 'button[aria-label^="Turn off microphone"]',
   unmuteControl: 'button[aria-label^="Turn on microphone"]',
   chat: /Chat with everyone|In-call messages|Chat with all/i,
+  chatControl: 'button[aria-label="Chat with everyone"], button[aria-label="In-call messages"], button[aria-label="Chat with all"]',
+  moreOptions: 'button[aria-label="More options"]',
+  chatMenu: /In-call messages/i,
+  settingsMenu: /Settings/i,
+  audioTab: 'Audio',
+  audioFilters: ['Studio sound', 'Noise cancellation'],
+  closeSettings: /^Close dialog$/i,
+  present: 'button[aria-label*="Present now"], button[aria-label="Share screen"]',
+  presenting: 'button[aria-label="You are presenting"]',
+  stopPresenting: /Stop presenting/i,
   messageInput: 'textarea[aria-label*="message" i], [contenteditable="true"][role="textbox"]',
   send: /^Send( message)?$/i,
   messages: '[data-message-id], [data-message-text]',
-  messageText: '[data-message-text]', sender: '[data-sender-name]',
+  messageText: '[data-message-text], [data-message-id] [jsname="dTKtvb"]', sender: '[data-sender-name]',
   googleAccount: 'a[aria-label^="Google Account"], button[aria-label^="Google Account"]',
   googleSignIn: 'a[href*="accounts.google.com/ServiceLogin"], a[data-action="sign in"]',
   guestName: 'input[placeholder="Your name"], input[aria-label="Your name"]',
@@ -56,6 +66,7 @@ export class MeetDriver {
   async disableMedia() {
     try {
       for (const [on, off] of [[selectors.muteControl, selectors.unmuteControl], [selectors.cameraOffControl, selectors.cameraOnControl]]) {
+        await this.page.locator(`${on}, ${off}`).first().waitFor({ state: 'visible', timeout: 15000 });
         const button = this.page.locator(on).first();
         // Only dispatch an OFF action; a modal must not silently skip it.
         if (await button.isVisible()) await button.evaluate(button => button.click());
@@ -89,9 +100,42 @@ export class MeetDriver {
     throw new Error('ADMISSION_TIMEOUT');
   }
   async unmute() {
-    const button = this.page.getByRole('button', { name: selectors.unmute }).first();
-    if (await button.isVisible()) await button.click();
-    await this.page.getByRole('button', { name: selectors.mute }).first().waitFor({ timeout: 5000 }).catch(() => { throw new Error('MUTED_BY_HOST'); });
+    await this.page.bringToFront();
+    const button = this.page.locator(selectors.unmuteControl).first();
+    if (await button.isVisible()) await button.click({ timeout: 5000 });
+    await this.page.locator(selectors.muteControl).first().waitFor({ timeout: 10000 }).catch(() => { throw new Error('MIC_STATE_UNVERIFIED'); });
+  }
+  async configureMusicAudio() {
+    await this.page.locator(selectors.moreOptions).click({ timeout: 10000 });
+    await this.page.getByRole('menuitem', { name: selectors.settingsMenu }).click();
+    await this.page.getByRole('tab', { name: selectors.audioTab, exact: true }).click();
+    for (const name of selectors.audioFilters) {
+      const control = this.page.getByRole('switch', { name, exact: true });
+      if (await control.isVisible()) {
+        if (await control.getAttribute('aria-checked') === 'true') await control.click();
+        if (await control.getAttribute('aria-checked') !== 'false') throw new Error('MEET_AUDIO_FILTERS_UNVERIFIED');
+      }
+    }
+    await this.page.getByRole('button', { name: selectors.closeSettings }).click();
+  }
+  async present() {
+    await this.disableMedia();
+    await this.page.bringToFront();
+    await this.page.evaluate(() => window.companionPresentation.arm());
+    await this.page.locator(selectors.present).first().click({ timeout: 10000 });
+    await this.page.waitForFunction(() => window.companionPresentation.status().active || window.companionPresentation.status().error, null, { timeout: 20000 });
+    const state = await this.page.evaluate(() => window.companionPresentation.status());
+    if (!state.active || !state.audio || state.error) throw new Error('PRESENTATION_FAILED');
+  }
+  async stopPresenting() {
+    const indicator = this.page.locator(selectors.presenting);
+    if (await indicator.isVisible()) {
+      const stop = this.page.getByRole('button', { name: selectors.stopPresenting });
+      if (!(await stop.isVisible())) await indicator.click({ timeout: 5000 });
+      await stop.click({ timeout: 5000 });
+      await indicator.waitFor({ state: 'hidden', timeout: 5000 }).catch(() => { throw new Error('PRESENTATION_STOP_UNVERIFIED'); });
+    }
+    await this.page.evaluate(() => window.companionPresentation?.stop());
   }
   async muted() { return this.page.locator(selectors.unmuteControl).first().isVisible(); }
   async camera(on) {
@@ -106,33 +150,18 @@ export class MeetDriver {
   }
   async openChat(onMessage = () => {}) {
     try {
-      if (!(await this.page.locator(selectors.messageInput).first().isVisible())) await this.page.getByRole('button', { name: selectors.chat }).first().click({ timeout: 5000 });
+      if (!(await this.page.locator(selectors.messageInput).first().isVisible())) {
+        const button = this.page.locator(selectors.chatControl).first();
+        if (await button.isVisible()) await button.evaluate(button => button.click());
+        else {
+          await this.page.locator(selectors.moreOptions).click({ timeout: 10000 });
+          await this.page.getByRole('menuitem', { name: selectors.chatMenu }).click({ timeout: 5000 });
+        }
+      }
       await this.page.locator(selectors.messageInput).first().waitFor({ timeout: 5000 });
       if (!this.chatReady) {
         await this.page.exposeBinding('companionChatMessage', (_source, message) => onMessage(message));
-        await this.page.evaluate(selectors => {
-          const seen = new WeakMap();
-          const read = node => {
-            const group = node.closest(selectors.sender) ?? node.parentElement?.closest('[data-message-id]') ?? node;
-            const senderNode = group.matches(selectors.sender) ? group : group.querySelector(selectors.sender);
-            const sender = senderNode?.getAttribute('data-sender-name');
-            const textNode = node.matches(selectors.messageText) ? node : node.querySelector(selectors.messageText);
-            const text = textNode?.textContent?.trim();
-            return sender && text ? { sender: sender.slice(0, 128), text: text.slice(0, 4096), receivedAt: Date.now() } : null;
-          };
-          document.querySelectorAll(selectors.messages).forEach(node => { const message = read(node); if (message) seen.set(node, message.text); });
-          const observer = new MutationObserver(() => {
-            document.querySelectorAll(selectors.messages).forEach(node => {
-              const message = read(node);
-              if (!message || seen.get(node) === message.text) return;
-              seen.set(node, message.text);
-              // Only leaf text nodes emit, avoiding container/child duplicate delivery.
-              if (node.matches(selectors.messageText) || !node.querySelector(selectors.messages)) window.companionChatMessage(message).catch(() => {});
-            });
-          });
-          observer.observe(document, { childList: true, subtree: true, characterData: true });
-          window.companionStopChat = () => observer.disconnect();
-        }, selectors);
+        await this.page.evaluate(observeMeetChat, selectors);
         this.chatReady = true;
       }
     } catch { throw new Error('CHAT_UNAVAILABLE'); }
@@ -142,4 +171,33 @@ export class MeetDriver {
     try { await this.page.locator(selectors.messageInput).first().fill(text); await this.page.getByRole('button', { name: selectors.send }).first().click({ timeout: 5000 }); }
     catch { throw new Error('CHAT_UNAVAILABLE'); }
   }
+}
+
+// Serialized into the Meet page; message bodies stay in memory.
+export function observeMeetChat(selectors) {
+  window.companionStopChat?.();
+  const seen = new WeakMap();
+  const seenIds = new Map();
+  const messageId = node => node.getAttribute('data-message-id') ?? node.closest('[data-message-id]')?.getAttribute('data-message-id');
+  const remember = (node, text) => { seen.set(node, text); const id = messageId(node); if (id) seenIds.set(id, text); };
+  const read = node => {
+    const group = node.closest(selectors.sender) ?? node.parentElement?.closest('[data-message-id]') ?? node;
+    const senderNode = group.matches(selectors.sender) ? group : group.querySelector(selectors.sender);
+    const sender = senderNode?.getAttribute('data-sender-name');
+    const textNode = node.matches(selectors.messageText) ? node : node.querySelector(selectors.messageText);
+    const text = textNode?.textContent?.trim();
+    return text ? { sender: sender?.slice(0, 128) ?? null, text: text.slice(0, 4096), receivedAt: Date.now() } : null;
+  };
+  document.querySelectorAll(selectors.messages).forEach(node => { const message = read(node); if (message) remember(node, message.text); });
+  const observer = new MutationObserver(() => {
+    document.querySelectorAll(selectors.messages).forEach(node => {
+      if (!node.matches(selectors.messageText) && node.querySelector(selectors.messages)) return;
+      const message = read(node);
+      if (!message || seen.get(node) === message.text || (messageId(node) && seenIds.get(messageId(node)) === message.text)) return;
+      remember(node, message.text);
+      window.companionChatMessage(message).catch(() => {});
+    });
+  });
+  observer.observe(document, { childList: true, subtree: true, characterData: true });
+  window.companionStopChat = () => observer.disconnect();
 }

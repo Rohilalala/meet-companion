@@ -8,6 +8,7 @@ import { meetInit } from '../controller/meet-init.js';
 import { playerInit } from '../controller/player-init.js';
 import { MeetDriver } from '../controller/meet-driver.js';
 import { Spotify } from '../controller/spotify.js';
+import { presentationInit } from '../controller/presentation-init.js';
 
 export const live = process.argv.includes('--live');
 export const headless = !process.argv.includes('--windowed');
@@ -32,18 +33,19 @@ export function requireAudio(config) {
   const route = devices.find(device => /^BlackHole 2ch$/i.test(device._name));
   if (!route?.coreaudio_device_input || !route?.coreaudio_device_output) throw new Error('BLACKHOLE_2CH_MISSING');
 }
-export async function harness({ audio = true } = {}) {
+export async function harness({ audio = true, presentation = false } = {}) {
   const config = await settings();
   if (audio) requireAudio(config);
   const spotify = new Spotify({ clientId: config.spotifyClientId, port: config.port, deviceId: config.spotifyDeviceId });
   let server, bot;
   try {
     server = await startServer({ ...config, callback: url => spotify.callback(url) });
-    bot = await launchBot({ headless });
+    bot = await launchBot({ headless, presentation });
     for (const origin of [server.origin, 'https://meet.google.com', 'https://open.spotify.com', 'https://music.apple.com', 'https://music.youtube.com', 'https://www.youtube.com', 'https://youtube.com']) {
       await bot.context.grantPermissions(origin === 'https://meet.google.com' ? ['microphone', 'camera'] : ['microphone'], { origin });
     }
     await bot.meet.addInitScript(meetInit);
+    if (presentation) await bot.meet.addInitScript(presentationInit);
     await bot.player.addInitScript(playerInit);
     await bot.player.goto(server.origin + '/player');
     return { ...bot, config, server, spotify, driver: new MeetDriver(bot.meet), async close() { spotify.close(); await bot.close(); await server.close(); } };

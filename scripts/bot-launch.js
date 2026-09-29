@@ -4,9 +4,10 @@ import { createServer } from 'node:net';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
+import { randomBytes } from 'node:crypto';
 import { requireRuntime, settings, assertProfileAvailable } from './settings.js';
 
-export async function launchBot({ headless = true } = {}) {
+export async function launchBot({ headless = true, presentation = false } = {}) {
   requireRuntime();
   const config = await settings();
   await assertProfileAvailable(config.profile);
@@ -14,13 +15,16 @@ export async function launchBot({ headless = true } = {}) {
   await new Promise((resolve, reject) => reservation.once('error', () => reject(new Error('DEBUG_PORT_IN_USE'))).listen(config.debugPort, '127.0.0.1', resolve));
   await new Promise(resolve => reservation.close(resolve));
   await mkdir(config.profile, { recursive: true, mode: 0o700 });
+  const presentationTitle = presentation ? 'Meet Companion Player ' + randomBytes(8).toString('hex') : null;
   const args = [
     `--user-data-dir=${config.profile}`, `--remote-debugging-port=${config.debugPort}`,
     '--remote-address=127.0.0.1', '--remote-debugging-address=127.0.0.1',
     '--autoplay-policy=no-user-gesture-required', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
     '--no-first-run', '--no-default-browser-check',
-    ...(headless ? ['--headless=new'] : ['--window-position=-10000,-10000']), 'about:blank',
+    ...(presentation ? [`--auto-select-tab-capture-source-by-title=${presentationTitle}`] : []),
+    '--window-size=1920,1080',
+    ...(headless ? ['--headless=new', '--screen-info={0,0 1920x1080}'] : ['--window-position=-10000,-10000']), 'about:blank',
   ];
   const child = spawn(config.chrome, args, { stdio: 'ignore' });
   let spawnFailed = false;
@@ -59,7 +63,7 @@ export async function launchBot({ headless = true } = {}) {
     const meet = await context.newPage();
     const player = await context.newPage();
     for (const page of context.pages()) if (page !== meet && page !== player) await page.close();
-    return { config, browser, context, meet, player, close, observation: { headless, loopbackOnly: true, attached: true, chromeVersion: browser.version(), tabs: 2 } };
+    return { config, browser, context, meet, player, close, presentationTitle, observation: { headless, loopbackOnly: true, attached: true, chromeVersion: browser.version(), tabs: 2 } };
   } catch (error) { await close(); throw error; }
 }
 

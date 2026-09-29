@@ -1,7 +1,7 @@
 # Meet Companion
 
 ## Purpose
-Private Google Meet music participant using a dedicated branded Chrome profile and BlackHole 2ch. This checkout contains only the Phase 0 diagnostic harness; report feasibility and stop before Phase 1.
+Private Google Meet music participant using a dedicated branded Chrome profile and BlackHole 2ch, with a Phase 0 diagnostic harness. The owner additionally authorized a minimal live `/bot` controller for Spotify, Apple Music and YouTube Music audio, plus native YouTube tab video/audio sharing.
 
 ## Run / test
 - `nvm use`
@@ -16,7 +16,7 @@ Private Google Meet music participant using a dedicated branded Chrome profile a
 Read `docs/FEASIBILITY.md`. Preflight prints only allowlisted system metadata; persist no chat text, tokens, meeting links, or media in logs.
 
 ## Landmines
-- Preserve the exact architecture in `docs/BRIEF.md`; no Phase 1 implementation before reporting Phase 0.
+- Preserve `docs/BRIEF.md` and its owner amendments; the requested chat runtime is authorized, while unrelated extension/PIN work remains deferred. Preserve diagnostic evidence and do not claim untested service support.
 - Never automate sign-in, inspect the owner's default Chrome profile, or use Chrome for Testing.
 - No recording, protected-media capture/download/decryption, paid routing substitutions, or default-output changes.
 - Do not treat a missing prerequisite as an executed experiment or a headless API check as E0 passing.

@@ -3,7 +3,19 @@ import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 export const selectors = {
   signedIn: '[data-testid="user-widget-link"], button[data-testid="user-widget-link"]',
   signedOut: '[data-testid="login-button"]',
+  play: '[data-testid="action-bar-row"] button[data-testid="play-button"]',
+  trackTitle: 'main h1',
+  nowPlayingTitle: '[data-testid="now-playing-widget"] [data-testid="context-item-link"]',
 };
+export async function play(page, link) {
+  const target = playbackBody(link);
+  await page.goto(link, { waitUntil: 'domcontentloaded' });
+  await page.locator(selectors.signedIn).first().waitFor({ timeout: 15000 }).catch(() => { throw new Error('SPOTIFY_LOGIN_REQUIRED'); });
+  await page.evaluate(() => window.companionRoute.check());
+  const title = target.uris ? (await page.locator(selectors.trackTitle).first().innerText()).trim() : null;
+  await page.locator(selectors.play).first().click({ timeout: 15000 });
+  if (title) await page.waitForFunction(({ selector, title }) => [...document.querySelectorAll(selector)].some(node => node.textContent.trim() === title), { selector: selectors.nowPlayingTitle, title }, { timeout: 30000 }).catch(() => { throw new Error('SPOTIFY_TRACK_NOT_CONFIRMED'); });
+}
 export async function session(page) {
   if (await page.locator(selectors.signedIn).first().isVisible()) return 'signed_in';
   if (await page.locator(selectors.signedOut).first().isVisible()) return 'signed_out';

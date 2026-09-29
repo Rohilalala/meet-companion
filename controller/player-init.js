@@ -6,7 +6,9 @@ export function playerInit() {
   const nativeMuted = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'muted');
   const media = new Set(), contexts = new Set();
   const routed = new WeakSet(), desiredMuted = new WeakMap();
-  let error = null;
+  const routing = new WeakMap();
+  let pausedMedia = null, pausedContexts = [];
+  let error = null, errorName = null;
   async function device() {
     const outputs = await navigator.mediaDevices.enumerateDevices();
     const match = outputs.find(item => item.kind === 'audiooutput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(item.label));
@@ -19,15 +21,21 @@ export function playerInit() {
     contexts.forEach(context => context.suspend().catch(() => {}));
     return new Error(error);
   }
-  async function route(element) {
+  function route(element) {
+    if (routing.has(element)) return routing.get(element);
     if (!desiredMuted.has(element)) desiredMuted.set(element, nativeMuted.get.call(element));
     media.add(element);
     routed.delete(element); nativeMuted.set.call(element, true);
-    try {
-      if (!nativeSink) throw new Error('AUDIO_ROUTE_LOST');
-      await nativeSink.call(element, await device());
-      routed.add(element); nativeMuted.set.call(element, desiredMuted.get(element));
-    } catch (cause) { throw fail(cause.message); }
+    const operation = (async () => {
+      try {
+        if (!nativeSink) throw new Error('AUDIO_ROUTE_LOST');
+        const id = await device();
+        if (element.sinkId !== id) await nativeSink.call(element, id);
+        routed.add(element); nativeMuted.set.call(element, desiredMuted.get(element));
+      } catch (cause) { errorName = cause.name; throw fail(cause.message); }
+    })().finally(() => routing.delete(element));
+    routing.set(element, operation);
+    return operation;
   }
   HTMLMediaElement.prototype.setSinkId = function () { return route(this); };
   Object.defineProperty(HTMLMediaElement.prototype, 'muted', {
@@ -73,11 +81,16 @@ export function playerInit() {
   if (NativeContext) {
     const sink = NativeContext.prototype.setSinkId;
     const resume = NativeContext.prototype.resume;
+    const close = NativeContext.prototype.close;
     const readiness = new WeakMap();
     NativeContext.prototype.setSinkId = async function () {
       try { if (!sink) throw new Error('AUDIO_ROUTE_LOST'); await sink.call(this, await device()); }
-      catch (cause) { throw fail(cause.message); }
+      catch (cause) {
+        if (this.state === 'closed') throw cause;
+        errorName = cause.name; throw fail(cause.message);
+      }
     };
+    NativeContext.prototype.close = function () { contexts.delete(this); return close.call(this); };
     NativeContext.prototype.resume = async function () { await readiness.get(this); await this.setSinkId(); return resume.call(this); };
     const Wrapped = new Proxy(NativeContext, { construct(Target, args) {
       // Chrome supports the silent sink: no audio reaches the default device during async lookup.
@@ -90,12 +103,32 @@ export function playerInit() {
     if (window.webkitAudioContext) window.webkitAudioContext = Wrapped;
   }
   navigator.mediaDevices.addEventListener('devicechange', () => {
-    media.forEach(element => { element.pause(); route(element).catch(() => {}); });
-    contexts.forEach(context => { context.suspend().catch(() => {}); context.setSinkId().catch(() => {}); });
+    // Revalidate the exact sink without leaving healthy playback paused.
+    // route() mutes HTML output until validation finishes and fails closed.
+    media.forEach(element => { route(element).catch(() => {}); });
+    contexts.forEach(context => { if (context.state !== 'closed') context.setSinkId().catch(() => {}); });
   });
   observe(document);
   window.companionRoute = {
+    pause({ detachedOnly = false } = {}) {
+      if (pausedMedia) return;
+      pausedMedia = [...media].filter(element => !element.paused && !element.ended && (!detachedOnly || !element.isConnected));
+      pausedContexts = [...contexts].filter(context => context.state === 'running');
+      media.forEach(element => element.pause());
+      return Promise.all(pausedContexts.map(context => context.suspend()));
+    },
+    async resume() {
+      if (!pausedMedia) return;
+      await device();
+      for (const element of pausedMedia) await element.play();
+      for (const context of pausedContexts) await context.resume();
+      pausedMedia = null; pausedContexts = [];
+    },
+    positions({ detachedOnly = false } = {}) {
+      return [...media].filter(element => (!detachedOnly || !element.isConnected) && !element.paused && !element.ended && element.readyState >= 2)
+        .map(element => element.currentTime);
+    },
     async check() { try { await device(); error = null; return { ok: true }; } catch (cause) { throw fail(cause.message); } },
-    status() { return { error, elements: media.size, contexts: contexts.size, playingElements: [...media].filter(element => !element.paused && !element.ended && element.currentTime > 0).length, runningContexts: [...contexts].filter(context => context.state === 'running').length }; },
+    status() { return { error, errorName: ['NotAllowedError', 'NotFoundError', 'NotSupportedError', 'AbortError', 'InvalidStateError', 'TypeError', 'Error'].includes(errorName) ? errorName : null, elements: media.size, contexts: contexts.size, playingElements: [...media].filter(element => !element.paused && !element.ended && element.currentTime > 0).length, runningContexts: [...contexts].filter(context => context.state === 'running').length }; },
   };
 }
