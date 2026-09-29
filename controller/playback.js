@@ -63,10 +63,10 @@ export function playback(h) {
       let title;
       try {
         await startMusic(command, async () => {
-          const source = ytdlp.target(command), resolved = await ytdlp.resolve(source);
+          const resolved = await ytdlp.resolve(ytdlp.target(command));
           title = resolved.title;
           // Always the local no-store stream: Chrome caches direct googlevideo audio in the bot profile, even with DevTools cache disabled.
-          await load(h.server.origin + '/stream/' + h.server.streamOnce(source, resolved.ext));
+          await load(h.server.origin + '/stream/' + h.server.streamOnce(resolved.link, resolved.ext));
         });
       } catch (error) {
         await h.driver.sendChat('Meet Companion: ' + (/^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED')).catch(() => {});

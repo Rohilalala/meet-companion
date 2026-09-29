@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 
 // Anonymous, audio-only, nothing on disk: ignore user config (it could add cookies), never read cookies, no cache dir.
 const base = ['--ignore-config', '--no-cookies', '--no-cookies-from-browser', '--no-cache-dir', '--no-playlist', '--no-warnings', '-f', 'bestaudio'];
-export const resolveArgs = target => [...base, '--print', 'title', '--print', 'ext', '--print', 'urls', '--', target];
+export const resolveArgs = target => [...base, '--print', 'id', '--print', 'title', '--print', 'ext', '--print', 'urls', '--', target];
 export const streamArgs = target => [...base, '-o', '-', '--', target];
 export const target = command => command.search ? 'ytsearch1:' + command.search : command.link;
 
@@ -24,9 +24,10 @@ export function resolve(value, { timeoutMs = 20000 } = {}) {
     child.on('error', error => { clearTimeout(timer); fail(new Error(errorCode('', error))); });
     child.on('close', code => {
       clearTimeout(timer);
-      const [title, ext, url, ...extra] = out.trim().split('\n');
-      if (code !== 0 || !url?.startsWith('https://') || extra.length) return fail(new Error(errorCode(err)));
-      done({ title: title.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 120), ext, url });
+      const [id, title, ext, url, ...extra] = out.trim().split('\n');
+      if (code !== 0 || !/^[\w-]{11}$/.test(id ?? '') || !url?.startsWith('https://') || extra.length) return fail(new Error(errorCode(err)));
+      // Stream the exact resolved video, so a search cannot pick a different result the second time.
+      done({ link: 'https://www.youtube.com/watch?v=' + id, title: title.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 120), ext, url });
     });
   });
 }
