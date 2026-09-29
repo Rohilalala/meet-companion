@@ -43,13 +43,13 @@ test('stream ids are single-use and expire', async () => {
   assert.equal(ids.take(late), null);
 });
 
-test('/bot distinguishes music from YouTube presentation and rejects lookalikes', () => {
+test('/bot distinguishes music, YouTube audio and ytvideo presentation, and rejects lookalikes', () => {
   const cases = [
     ['https://open.spotify.com/track/fixture123?si=test', 'spotify', 'music'],
     ['https://music.apple.com/us/album/test/123?i=456', 'applemusic', 'music'],
-    ['https://music.youtube.com/watch?v=abcdefghijk', 'youtubemusic', 'music'],
-    ['https://youtu.be/abcdefghijk', 'youtube', 'presentation'],
-    ['https://www.youtube.com/shorts/abcdefghijk', 'youtube', 'presentation'],
+    ['https://music.youtube.com/watch?v=abcdefghijk', 'youtube', 'audio'],
+    ['https://youtu.be/abcdefghijk', 'youtube', 'audio'],
+    ['https://www.youtube.com/shorts/abcdefghijk', 'youtube', 'audio'],
   ];
   for (const [link, service, mode] of cases) {
     for (const text of ['/bot ' + link, '/bot "' + link + '"']) {
@@ -62,7 +62,16 @@ test('/bot distinguishes music from YouTube presentation and rejects lookalikes'
   assert.deepEqual(parseBotCommand('/bot'), { action: 'help' });
   assert.deepEqual(parseBotCommand('/bot play'), { action: 'resume' });
   assert.equal(parseBotCommand('/bot play spotify https://open.spotify.com/track/fixture123').service, 'spotify');
-  assert.equal(parseBotCommand('/bot youtube “https://youtu.be/abcdefghijk”').mode, 'presentation');
+  assert.equal(parseBotCommand('/bot youtube “https://youtu.be/abcdefghijk”').mode, 'audio');
+  for (const alias of ['youtube', 'yt', 'ytmusic', 'youtube-music']) {
+    assert.deepEqual(parseBotCommand(`/bot ${alias} https://www.youtube.com/watch?v=abcdefghijk&list=RDabc`), { action: 'play', service: 'youtube', mode: 'audio', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  }
+  assert.deepEqual(parseBotCommand('/bot ytvideo https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  assert.deepEqual(parseBotCommand('/bot yt bairi piya shreya'), { action: 'play', service: 'youtube', mode: 'audio', search: 'bairi piya shreya' });
+  assert.deepEqual(parseBotCommand('/bot play yt --cookies x'), { action: 'play', service: 'youtube', mode: 'audio', search: '--cookies x' });
+  assert.throws(() => parseBotCommand('/bot ytvideo bairi piya'), /BOT_LINK_REQUIRED/);
+  assert.throws(() => parseBotCommand('/bot https://www.youtube.com/playlist?list=PLabc'), /BOT_PLAYLIST_UNSUPPORTED/);
+  assert.throws(() => parseBotCommand('/bot yt ' + 'x'.repeat(201)), /BOT_SEARCH_INVALID/);
   assert.throws(() => parseBotCommand('/bot spotify https://youtu.be/abcdefghijk'), /BOT_SERVICE_LINK_MISMATCH/);
 });
 
@@ -75,7 +84,7 @@ test('chat playback serializes source changes, stops on failure, and never repor
     report: result => reports.push(result),
   });
   bot.receive({ text: '/bot https://open.spotify.com/track/fixture123' });
-  await bot.receive({ text: '/bot https://youtu.be/abcdefghijk' });
+  await bot.receive({ text: '/bot ytvideo https://youtu.be/abcdefghijk' });
   assert.deepEqual(events, ['stop', 'spotify', 'stop', 'stop', 'youtube']);
   assert.deepEqual(reports.map(report => report.result), ['ERROR', 'STARTED']);
   assert.equal(JSON.stringify(reports).includes('https'), false);

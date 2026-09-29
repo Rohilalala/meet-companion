@@ -93,7 +93,18 @@ Create a Spotify development-mode app for the owner's Premium account and allowl
 
 The official open.spotify.com player must appear as a Connect device. Ambiguous/missing devices produce SPOTIFY_WEB_PLAYER_DEVICE_REQUIRED; configure its exact device ID if necessary. A state response belonging to another device produces STREAM_TAKEN_OVER. The script never falls back to another player. Actual Premium/dev-mode API behavior remains E6 work.
 
-Apple Music and YouTube Music playback remains in their official players, controlled through the DOM and `setSinkId`; no media capture, downloader or decryption exists. For the later Apple metadata API, prepare a developer team ID, key ID and path to the owner's existing MusicKit `.p8` key outside the repository; metadata token integration is deferred to Phase 1. [Apple developer tokens](https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens)
+Apple Music playback remains in its official player, controlled through the DOM and `setSinkId`; no media capture or decryption exists. For the later Apple metadata API, prepare a developer team ID, key ID and path to the owner's existing MusicKit `.p8` key outside the repository; metadata token integration is deferred to Phase 1. [Apple developer tokens](https://developer.apple.com/documentation/applemusicapi/generating-developer-tokens)
+
+### YouTube audio (yt-dlp)
+
+`/bot youtube <link>`, `/bot yt <link or search text>`, `/bot ytmusic <link>` and plain YouTube links play **audio only** through yt-dlp, the way Discord music bots do. This breaches YouTube's terms; the owner accepts that for private, non-commercial use. `/bot ytvideo <link>` keeps the native tab-share video path.
+
+```sh
+brew install yt-dlp
+brew upgrade yt-dlp   # when YouTube changes break extraction
+```
+
+`npm run preflight` reports the installed version or `YTDLP_MISSING`. yt-dlp is not vendored. It always runs anonymously with `--ignore-config --no-cookies --no-cookies-from-browser --no-cache-dir --no-playlist`, audio only, and never writes media to disk. The direct audio URL stays in memory and plays in the local `/player` page, routed to BlackHole. If it does not start within 10 s, `/player` loads a single-use `/stream/<id>` (60 s expiry) that pipes yt-dlp's stdout; the child is killed on stop, source change and exit. Errors reach chat as `YTDLP_MISSING`, `YOUTUBE_BLOCKED` or `MEDIA_UNAVAILABLE`. Never add cookies, PO-token plugins, proxies or user-agent changes; if anonymous extraction is blocked, the feature stops working.
 
 Prepare a [Jamendo API v3](https://developer.jamendo.com/v3.0) client ID for Phase 1. Jamendo integration, artist/backlink attribution and text-to-local-file matching are not part of this Phase 0 harness. Local playback currently takes an exact configured file beneath `musicFolder`.
 
