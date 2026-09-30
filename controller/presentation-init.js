@@ -27,7 +27,7 @@ export function presentationInit() {
         const apply = track.applyConstraints.bind(track);
         track.applyConstraints = constraints => {
           const { advanced, ...rest } = constraints ?? {};
-          return apply({ ...rest, width: { max: 1280 }, height: { max: 720 }, frameRate: { ideal: 30, max: 30 } });
+          return apply({ ...rest, width: { max: 1920 }, height: { max: 1080 }, frameRate: { ideal: 30, max: 30 } });
         };
         const clone = track.clone.bind(track);
         track.clone = () => { const copy = clone(); configure(copy); return copy; };

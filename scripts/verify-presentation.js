@@ -41,7 +41,7 @@ try {
   console.log(JSON.stringify({ stage, observation: result }));
   assert.equal(result.surface, 'browser'); assert.equal(result.audioTracks, 1);
   // Allow two pixels of rounding in the native tab surface.
-  assert.ok(Math.abs(result.width - 1280) <= 2); assert.ok(Math.abs(result.height - 720) <= 2);
+  assert.ok(Math.abs(result.width - 1920) <= 2); assert.ok(Math.abs(result.height - 1080) <= 2);
   assert.ok(Math.abs(result.width / result.height - 16 / 9) < 0.005);
   assert.ok(result.syntheticAudioEnergy > 0.001);
   await h.meet.evaluate(() => window.companionPresentation.stop());
