@@ -10,6 +10,36 @@ import { playback } from '../controller/playback.js';
 import { presentationInit } from '../controller/presentation-init.js';
 import { parseBotCommand, ChatBot } from '../controller/bot-command.js';
 import { resolveArgs, streamArgs, errorCode as ytdlpError, target as ytdlpTarget, oneTimeIds } from '../controller/ytdlp.js';
+import { startControl } from './control.js';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+
+test('control page API: same-origin only, validated links, one bot, events without extra fields', async () => {
+  const spawned = [], signals = [];
+  const control = await startControl({ port: 0, savedLink: 'https://meet.google.com/abc-defg-hij', spawnBot: link => {
+    const bot = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill: signal => { signals.push(signal); bot.emit('exit'); } });
+    spawned.push({ link, bot }); return bot;
+  } });
+  const url = path => `http://127.0.0.1:${control.port}${path}`;
+  const post = (path, body, headers = { 'X-Companion': '1' }) => fetch(url(path), { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  try {
+    assert.equal((await fetch(url('/'))).status, 200);
+    assert.equal((await post('/join', { saved: true }, {})).status, 403, 'no custom header');
+    assert.equal((await post('/join', { saved: true }, { 'X-Companion': '1', Origin: 'https://evil.test' })).status, 403, 'foreign origin');
+    assert.equal((await post('/join', { saved: true }, { 'X-Companion': '1', 'Sec-Fetch-Site': 'cross-site' })).status, 403, 'cross-site');
+    assert.equal((await post('/join', { link: 'https://evil.test/abc-defg-hij' })).status, 400);
+    assert.equal((await post('/join', { saved: true })).status, 202);
+    assert.equal(spawned[0].link, 'https://meet.google.com/abc-defg-hij');
+    assert.equal((await post('/join', { link: 'https://meet.google.com/xyz-abcd-efg' })).status, 409, 'one bot at a time');
+    spawned[0].bot.stdout.write(JSON.stringify({ experiment: 'BOT', state: 'LISTENING', secret: 'x', observedAt: 't' }) + '\n');
+    await new Promise(resolve => setImmediate(resolve));
+    const status = await (await fetch(url('/status'), { headers: { 'X-Companion': '1' } })).json();
+    assert.equal(status.running, true); assert.equal(status.meeting, 'abc-defg-hij');
+    assert.deepEqual(status.events, [{ observedAt: 't', state: 'LISTENING' }]);
+    assert.equal((await post('/leave', {})).status, 202); assert.deepEqual(signals, ['SIGINT']);
+    assert.equal((await post('/leave', {})).status, 409);
+  } finally { await control.close(); }
+});
 
 test('yt-dlp arguments are anonymous, single-video, audio-only, and end option parsing before the target', () => {
   for (const build of [resolveArgs, streamArgs]) {

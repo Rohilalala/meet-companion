@@ -8,6 +8,7 @@
   },
   "scripts": {
     "bot": "node scripts/bot-run.js",
+    "control": "node scripts/control.js",
     "preflight": "node scripts/preflight.js",
     "bot:login": "node scripts/bot-login.js",
     "check": "node scripts/check.js",
