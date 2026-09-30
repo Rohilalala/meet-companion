@@ -10,6 +10,31 @@ The owner confirmed that the same YouTube link plays normally beyond the first m
 
 **The current runtime does not reliably include the latest saved YouTube changes.** It predates the final `object-fit: contain` and already-fullscreen guard edits. Those edits pass static checks, but have not been accepted in a live receiver test.
 
+## Update 2026-09-30 09:40 UTC (live session, meeting supplied by the owner)
+
+Observed in a live meeting with the owner on a second device; numbers are from the bot's own logs and `meetCompanion.audioStats()`.
+
+- Working and owner-confirmed:
+  - yt-dlp audio (`/play <song|link>`, bare Discord-style commands and plain-text search).
+  - The queue: queued, auto-advanced and skipped live.
+  - `/volume`, pause and resume.
+  - yt-dlp video (`/video <link|search>`) at 1080p, picture-only share. The owner confirmed clean sound in sync with the picture.
+- Audio path measured:
+  - Music on the mic: ~67 kbps Opus (Meet's mic encoding: mono, 32k target).
+  - Video with tab audio: mic ~1 kbps and the share audio carried the sound at 64 kbps; the owner heard it muffled. Cause: `suppressLocalAudioPlayback` silences the tab's BlackHole output, and muting the share audio did not reach Meet's cloned track.
+  - Fix: yt-dlp video requests no tab audio. The mic then measured 64 kbps and the share audio 0.
+- Live bugs found and fixed:
+  - Meet's send button was relabelled "Send a message": chat is now sent with Enter.
+  - The chat button reads "Chat with everyone - New message" when there are unread messages: now matched by prefix.
+  - Meet auto-hides its toolbar: the driver moves the mouse first.
+  - The "Others may see your video differently" popup blocked More options: it is now dismissed with Got it.
+  - Rejoining after an unclean exit showed "Switch here"/"Join here too".
+  - Resume never unmuted the mic for yt-dlp audio.
+  - The audio-settings dialog now opens once per call.
+- Rate limit: after many test resolves, YouTube returned HTTP 429 to anonymous yt-dlp at 09:37 UTC (`YOUTUBE_BLOCKED`, yt-dlp 2026.08.19, no update available). Per the guardrails there are no cookies, PO tokens or proxies: wait it out. The owner declined reducing lookups per track for now.
+- A network outage also appeared: at 09:22 UTC `www.youtube.com` failed DNS while Google resolved. The bot reports this as `MEDIA_UNAVAILABLE`; a clearer code is not built.
+- Still open: owner-only permissions, Spotify/Apple end-of-track detection, and a shutdown that logs `BROWSER_CRASHED` for intentional stops.
+
 ## Update 2026-09-30 22:40 UTC — YouTube audio via yt-dlp
 
 Measured only; live Meet acceptance has **not** run.

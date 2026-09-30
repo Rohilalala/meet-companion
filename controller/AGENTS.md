@@ -73,3 +73,11 @@ Playing a yt-dlp-resolved googlevideo URL in /player wrote about 4 MB of audio p
 
 ### 2026-09-30 — pgrep -x cannot see yt-dlp
 Homebrew yt-dlp runs under Python, so pgrep -x yt-dlp reported 0 while a stream child was alive. Use pgrep -f 'yt-dlp .*--no-playlist' when checking for leftover children.
+
+
+### 2026-09-30 — Tab-capture audio suppression silences the BlackHole path
+With getDisplayMedia audio {suppressLocalAudioPlayback: true}, the captured tab stops playing locally, so its setSinkId(BlackHole) output and the Meet mic went silent (~1 kbps) while Meet's share audio (heard as muffled) carried the sound. For yt-dlp video request audio: false and let the mic carry it; measured mic 64 kbps, share 0, owner confirmed clean and in sync.
+
+
+### 2026-09-30 — Meet UI labels and overlays that broke live commands
+Send button is "Send a message" (send chat with Enter, verify the box cleared); chat button becomes "Chat with everyone - New message" with unread messages (prefix match); the toolbar auto-hides (move the mouse first); "Others may see your video differently" intercepts clicks (click Got it). Each was confirmed by a read-only CDP label dump, then fixed and re-run live.
