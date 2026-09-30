@@ -12,7 +12,8 @@ export const selectors = {
   muteControl: 'button[aria-label^="Turn off microphone"]',
   unmuteControl: 'button[aria-label^="Turn on microphone"]',
   chat: /Chat with everyone|In-call messages|Chat with all/i,
-  chatControl: 'button[aria-label="Chat with everyone"], button[aria-label="In-call messages"], button[aria-label="Chat with all"]',
+  // Prefix match: with unread messages Meet labels it "Chat with everyone - New message".
+  chatControl: 'button[aria-label^="Chat with everyone"], button[aria-label^="In-call messages"], button[aria-label^="Chat with all"]',
   moreOptions: 'button[aria-label="More options"]',
   chatMenu: /In-call messages/i,
   settingsMenu: /Settings/i,
