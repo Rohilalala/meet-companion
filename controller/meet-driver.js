@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // English Chrome/Meet UI. All Meet selectors, including chat, live here.
 export const selectors = {
-  leave: /Leave call/i, join: /^(Join now|Ask to join)$/i,
+  leave: /Leave call/i, join: /^(Join now|Ask to join|Join here too|Ask to join anyway|Join anyway)$/i,
   cameraOff: /Turn off camera/i, cameraOn: /Turn on camera/i,
   mute: /Turn off microphone/i, unmute: /Turn on microphone/i,
   leaveControl: 'button[aria-label^="Leave call"]',
@@ -85,7 +85,7 @@ export class MeetDriver {
     }).catch(() => { throw new Error('BLACKHOLE_INPUT_UNAVAILABLE'); });
     await this.disableMedia();
     const button = this.page.getByRole('button', { name: selectors.join }).first();
-    const asked = /Ask to join/i.test(await button.innerText());
+    const asked = /^Ask to join/i.test(await button.innerText());
     await button.click();
     const requestedAt = Date.now();
     while (Date.now() - requestedAt < timeout) {
@@ -106,6 +106,8 @@ export class MeetDriver {
     await this.page.locator(selectors.muteControl).first().waitFor({ timeout: 10000 }).catch(() => { throw new Error('MIC_STATE_UNVERIFIED'); });
   }
   async configureMusicAudio() {
+    // Filters stay off for the rest of the call; reopening settings each track was slow and closed the chat panel.
+    if (this.audioConfigured) return;
     await this.page.locator(selectors.moreOptions).click({ timeout: 10000 });
     await this.page.getByRole('menuitem', { name: selectors.settingsMenu }).click();
     await this.page.getByRole('tab', { name: selectors.audioTab, exact: true }).click();
@@ -117,6 +119,7 @@ export class MeetDriver {
       }
     }
     await this.page.getByRole('button', { name: selectors.closeSettings }).click();
+    this.audioConfigured = true;
   }
   async present() {
     await this.disableMedia();
@@ -168,6 +171,7 @@ export class MeetDriver {
   }
   async sendChat(text) {
     if (!this.chatReady || typeof text !== 'string' || text.length > 4096) throw new Error('CHAT_UNAVAILABLE');
+    await this.openChat(); // Meet's audio settings dialog can close the side panel.
     try { await this.page.locator(selectors.messageInput).first().fill(text); await this.page.getByRole('button', { name: selectors.send }).first().click({ timeout: 5000 }); }
     catch { throw new Error('CHAT_UNAVAILABLE'); }
   }
