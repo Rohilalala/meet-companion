@@ -15,7 +15,12 @@ if (!live) {
     const meeting = process.argv.indexOf('--meeting');
     stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink);
     bot = new ChatBot({ ...playback(h), report: observation => emit('BOT', observation) });
-    stage = 'chat'; await h.driver.openChat(message => bot.receive(message));
+    // Right after joining, Meet popups can cover the chat controls: dismiss and retry.
+    stage = 'chat';
+    for (let attempt = 1; ; attempt++) {
+      try { await h.driver.openChat(message => bot.receive(message)); break; }
+      catch (error) { if (attempt === 3) throw error; await h.meet.keyboard.press('Escape'); await delay(2000); }
+    }
     emit('BOT', { state: 'LISTENING', cameraOff: true, microphoneOff: true, command: '/bot <link>' });
     while (!interrupted) {
       await delay(1000);
