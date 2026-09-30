@@ -7,6 +7,9 @@ import * as ytdlp from './ytdlp.js';
 export function playback(h) {
   const adapters = { spotify: spotifyPlay, applemusic: applePlay, youtubemusic: musicPlay };
   let active = null, paused = false, muted = false, level = 1;
+  // The BlackHole mic carries everything except the YouTube web-player share (ytweb), which uses tab audio.
+  // yt-dlp video mutes its tab audio: Meet's presentation audio sounded much worse than the mic.
+  const micCarries = command => command.mode !== 'presentation' || command.dlp;
   async function stop() {
     // Close the microphone before changing or clearing the player source.
     await h.driver.disableMedia();
@@ -61,14 +64,14 @@ export function playback(h) {
       if (!paused) return;
       await h.player.evaluate(() => window.companionRoute.resume());
       await playing(active); paused = false;
-      if (!muted && active.mode === 'music') await h.driver.unmute();
-      if (active.mode === 'presentation') await h.meet.evaluate(muted => window.companionPresentation.mute(muted), muted);
+      if (!muted && micCarries(active)) await h.driver.unmute();
+      if (active.mode === 'presentation') await h.meet.evaluate(value => window.companionPresentation.mute(value), muted || !!active.dlp);
     },
     async mute(value) {
       muted = value;
-      if (value || paused || !active || active.mode === 'presentation') await h.driver.disableMedia();
+      if (value || paused || !active || !micCarries(active)) await h.driver.disableMedia();
       else await h.driver.unmute();
-      await h.meet.evaluate(value => window.companionPresentation.mute(value), value || paused);
+      await h.meet.evaluate(value => window.companionPresentation.mute(value), value || paused || !!active?.dlp);
     },
     playMusic: command => startMusic(command, () => adapters[command.service](h.player, command.link)),
     async playAudio(command) {
@@ -86,6 +89,7 @@ export function playback(h) {
     async playVideo(command) {
       let title;
       if (command.dlp) {
+        await h.driver.configureMusicAudio();
         // yt-dlp video in the bot's own /player page (no YouTube page), loaded paused so the tab is presented first.
         const resolved = await (command.resolved ?? ytdlp.resolve(ytdlp.target(command), { kind: 'video' }));
         title = resolved.title;
@@ -98,9 +102,15 @@ export function playback(h) {
       else await youtube.play(h.player);
       await playing(command);
       await h.player.evaluate(level => window.companionRoute.volume(level), level);
-      if (!(await h.driver.muted())) throw new Error('PRESENTATION_MIC_NOT_MUTED');
-      active = command;
-      await h.meet.evaluate(muted => window.companionPresentation.mute(muted), muted);
+      if (command.dlp) {
+        await h.meet.evaluate(() => window.companionPresentation.mute(true));
+        active = command;
+        if (!muted) await h.driver.unmute();
+      } else {
+        if (!(await h.driver.muted())) throw new Error('PRESENTATION_MIC_NOT_MUTED');
+        active = command;
+        await h.meet.evaluate(muted => window.companionPresentation.mute(muted), muted);
+      }
       if (title) await h.driver.sendChat('Playing: ' + title).catch(() => {});
       return title;
     },

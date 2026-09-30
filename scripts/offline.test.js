@@ -25,7 +25,7 @@ test('yt-dlp arguments are anonymous, single-video, audio-only, and end option p
   for (const build of [resolveArgs, streamArgs]) {
     const args = build('x', 'video');
     for (const flag of ['--ignore-config', '--no-cookies', '--no-cookies-from-browser', '--no-cache-dir', '--no-playlist']) assert.ok(args.includes(flag), flag);
-    assert.equal(args[args.indexOf('-f') + 1], 'bv*[height<=720][ext=webm]+ba[ext=webm]');
+    assert.equal(args[args.indexOf('-f') + 1], 'bv*[height<=1080][ext=webm]+ba[ext=webm]');
     assert.equal(args[args.indexOf('--merge-output-format') + 1], 'webm');
     assert.equal(args.at(-2), '--');
   }
@@ -206,6 +206,25 @@ test('pause, resume, mute and help dispatch without replacing the current source
   assert.deepEqual(events, ['pause', 'resume', 'mute', 'unmute', 'help', 'stop']);
 });
 
+test('resume turns the mic back on for yt-dlp audio and video, but not the ytweb share', async () => {
+  const mic = [];
+  const h = {
+    driver: { configureMusicAudio: async () => {}, disableMedia: async () => mic.push('off'), unmute: async () => mic.push('on'), muted: async () => true, stopPresenting: async () => {}, present: async () => {}, sendChat: async () => {} },
+    player: { evaluate: async () => {}, waitForFunction: async () => {}, goto: async () => {}, setViewportSize: async () => {} },
+    meet: { evaluate: async () => true },
+    server: { origin: 'http://127.0.0.1:3210', streamOnce: () => 'id', stopStreams() {} },
+  };
+  const actions = playback(h);
+  const resolved = Promise.resolve({ link: 'https://www.youtube.com/watch?v=abcdefghijk', title: 'T', ext: 'webm' });
+  for (const command of [{ service: 'youtube', mode: 'audio', search: 's', resolved }, { service: 'youtube', mode: 'presentation', dlp: true, search: 's', resolved }]) {
+    await (command.dlp ? actions.playVideo(command) : actions.playAudio(command));
+    assert.equal(mic.at(-1), 'on', 'mic carries the track');
+    await actions.pause(); assert.equal(mic.at(-1), 'off');
+    await actions.resume(); assert.equal(mic.at(-1), 'on', 'resume must unmute the mic');
+    await actions.stop();
+  }
+});
+
 test('player controls include detached audio, preserve repeated pauses, and refuse missing routes', async () => {
   let available = true, deviceChange;
   class MediaElement {
@@ -308,13 +327,13 @@ test('presentation enforces tab audio, motion, bounded resolution and safe cloni
   runInNewContext(`(${presentationInit.toString()})()`, context);
   await assert.rejects(() => context.navigator.mediaDevices.getDisplayMedia(), /PRESENTATION_NOT_ARMED/);
   context.window.companionPresentation.arm(); await context.navigator.mediaDevices.getDisplayMedia();
-  assert.equal(video.contentHint, 'motion'); assert.equal(video.getSettings().width, 1280);
+  assert.equal(video.contentHint, 'motion'); assert.equal(video.getSettings().width, 1920);
   const copy = video.clone();
   assert.equal(copy.calls, 0); // Configuring a clone must not race the consumer's applyConstraints.
   copy.contentHint = 'detail';
   await copy.applyConstraints({ frameRate: 5, width: 3840, advanced: [{ width: { exact: 3840 } }] });
   assert.equal(copy.contentHint, 'motion'); assert.equal(copy.getSettings().frameRate, 30);
-  assert.equal(copy.getSettings().width, 1280); assert.equal(copy.constraints.advanced, undefined);
+  assert.equal(copy.getSettings().width, 1920); assert.equal(copy.constraints.advanced, undefined);
   video.stop(); assert.equal(context.window.companionPresentation.status().active, true);
   context.window.companionPresentation.stop(); assert.equal(copy.readyState, 'ended');
   const rejectedVideo = new Track(); rejectedVideo.settings.displaySurface = 'window';
