@@ -43,7 +43,14 @@ export function meetingURL(value) {
 export class MeetDriver {
   constructor(page) { this.page = page; this.chatReady = false; }
   // Meet hides its toolbar after a few idle seconds; hidden controls fail visibility checks and clicks (Vexa does the same).
-  async reveal() { await this.page.mouse?.move(600, 400); await this.page.mouse?.move(640, 420); }
+  // Meet popups such as "Others may see your video differently" also intercept toolbar clicks (meet-teams-bot dismisses them too).
+  async reveal() {
+    await this.page.mouse?.move(600, 400); await this.page.mouse?.move(640, 420);
+    try {
+      const popups = this.page.locator('[role="dialog"], [role="alertdialog"]').getByRole('button', { name: /^(Got it|Dismiss)$/i });
+      for (let i = await popups.count(); i > 0; i--) await popups.first().click({ timeout: 2000 });
+    } catch { /* no popup, or it closed itself */ }
+  }
   async googleSession() {
     if (new URL(this.page.url()).hostname === 'accounts.google.com') return 'signed_out';
     if (await this.page.locator(selectors.googleAccount).first().isVisible()) return 'signed_in';
