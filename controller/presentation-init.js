@@ -1,7 +1,7 @@
 // Use Meet's own native display stream. Never read or record its media.
 export function presentationInit() {
   const nativeDisplay = navigator.mediaDevices.getDisplayMedia?.bind(navigator.mediaDevices);
-  let armed = false, stream = null, error = null, errorName = null;
+  let armed = false, withAudio = true, stream = null, error = null, errorName = null;
   const videoTracks = new Set();
   navigator.mediaDevices.getDisplayMedia = async options => {
     if (!armed || !nativeDisplay) throw new DOMException('PRESENTATION_NOT_ARMED', 'NotAllowedError');
@@ -9,11 +9,13 @@ export function presentationInit() {
     try {
       stream = await nativeDisplay({
         ...options, video: { displaySurface: 'browser', width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } },
-        audio: { suppressLocalAudioPlayback: true },
+        // yt-dlp video shares picture only: suppressing local playback would silence its BlackHole mic path,
+        // and Meet's share audio sounded muffled. Tab audio (ytweb) is requested without Chrome's voice processing.
+        audio: withAudio ? { suppressLocalAudioPlayback: true, echoCancellation: false, noiseSuppression: false, autoGainControl: false } : false,
         preferCurrentTab: false, selfBrowserSurface: 'exclude',
         systemAudio: 'exclude', monitorTypeSurfaces: 'exclude', surfaceSwitching: 'exclude',
       });
-      if (stream.getVideoTracks()[0]?.getSettings().displaySurface !== 'browser' || !stream.getAudioTracks().length) {
+      if (stream.getVideoTracks()[0]?.getSettings().displaySurface !== 'browser' || (withAudio && !stream.getAudioTracks().length)) {
         stream.getTracks().forEach(track => track.stop());
         throw new Error('PRESENTATION_TAB_AUDIO_REQUIRED');
       }
@@ -42,7 +44,7 @@ export function presentationInit() {
     }
   };
   window.companionPresentation = {
-    arm() { armed = true; error = null; errorName = null; },
+    arm(audio = true) { armed = true; withAudio = audio; error = null; errorName = null; },
     stop() { armed = false; stream?.getTracks().forEach(track => track.stop()); videoTracks.forEach(track => track.stop()); videoTracks.clear(); stream = null; },
     mute(value) { stream?.getAudioTracks().forEach(track => { track.enabled = !value; }); },
     status() {

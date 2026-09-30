@@ -132,14 +132,14 @@ export class MeetDriver {
     await this.page.getByRole('button', { name: selectors.closeSettings }).click();
     this.audioConfigured = true;
   }
-  async present() {
+  async present({ audio = true } = {}) {
     await this.disableMedia();
     await this.page.bringToFront();
-    await this.page.evaluate(() => window.companionPresentation.arm());
+    await this.page.evaluate(audio => window.companionPresentation.arm(audio), audio);
     await this.page.locator(selectors.present).first().click({ timeout: 10000 });
     await this.page.waitForFunction(() => window.companionPresentation.status().active || window.companionPresentation.status().error, null, { timeout: 20000 });
     const state = await this.page.evaluate(() => window.companionPresentation.status());
-    if (!state.active || !state.audio || state.error) throw new Error('PRESENTATION_FAILED');
+    if (!state.active || (audio && !state.audio) || state.error) throw new Error('PRESENTATION_FAILED');
   }
   async stopPresenting() {
     await this.reveal();

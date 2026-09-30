@@ -123,6 +123,20 @@ export function meetInit() {
       }
       return observations;
     },
+    // Numbers only: what Meet actually encodes for the mic (bitrate, channels, Opus fmtp such as stereo/maxaveragebitrate).
+    async audioStats() {
+      const observations = [];
+      for (const peer of peers) {
+        if (peer.signalingState === 'closed') continue;
+        const stats = await peer.getStats();
+        stats.forEach(value => {
+          if (value.type !== 'outbound-rtp' || value.kind !== 'audio') return;
+          const codec = stats.get(value.codecId);
+          observations.push({ bytesSent: value.bytesSent, packetsSent: value.packetsSent, targetBitrate: value.targetBitrate, timestamp: value.timestamp, mimeType: codec?.mimeType, channels: codec?.channels, fmtp: codec?.sdpFmtpLine });
+        });
+      }
+      return observations;
+    },
     camtest(startAt = Date.now() + 1000) { epoch = startAt; return { width: canvas.width, height: canvas.height, requestedFps: 30, epoch }; },
     stopCamtest() { epoch = null; },
     inputSettings() { return [...inputs].filter(track => track.readyState === 'live').map(track => { const settings = track.getSettings(); return { echoCancellation: settings.echoCancellation, noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl, sampleRate: settings.sampleRate, channelCount: settings.channelCount }; }); },

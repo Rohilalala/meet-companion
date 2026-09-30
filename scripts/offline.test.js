@@ -341,6 +341,16 @@ test('presentation enforces tab audio, motion, bounded resolution and safe cloni
   context.window.companionPresentation.arm();
   await assert.rejects(() => context.navigator.mediaDevices.getDisplayMedia(), /PRESENTATION_TAB_AUDIO_REQUIRED/);
   assert.equal(rejectedVideo.readyState, 'ended');
+  // Picture-only share for yt-dlp video: no tab audio requested or required, so local playback reaches BlackHole.
+  let requested;
+  const pictureOnly = new Track();
+  context.navigator.mediaDevices.getDisplayMedia = async options => { requested = options; return { getVideoTracks: () => [pictureOnly], getAudioTracks: () => [], getTracks: () => [pictureOnly] }; };
+  runInNewContext(`(${presentationInit.toString()})()`, context);
+  context.window.companionPresentation.arm(false); await context.navigator.mediaDevices.getDisplayMedia();
+  assert.equal(requested.audio, false);
+  assert.equal(context.window.companionPresentation.status().active, true);
+  context.window.companionPresentation.arm(); await assert.rejects(() => context.navigator.mediaDevices.getDisplayMedia(), /PRESENTATION_TAB_AUDIO_REQUIRED/);
+  assert.equal(requested.audio.suppressLocalAudioPlayback, true); assert.equal(requested.audio.noiseSuppression, false);
 });
 
 test('Meet media-off check handles controls hidden from accessibility and refuses unknown state', async () => {

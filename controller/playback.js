@@ -97,7 +97,7 @@ export function playback(h) {
         const src = h.server.origin + '/stream/' + h.server.streamOnce(resolved.link, resolved.ext, 'video');
         await h.player.evaluate(({ src, title }) => window.companionPlayer.video(src, title), { src, title: h.presentationTitle });
       } else await youtube.prepare(h.player, command.link, h.presentationTitle);
-      await h.driver.present();
+      await h.driver.present({ audio: !command.dlp });
       if (command.dlp) await h.player.evaluate(() => window.companionPlayer.start());
       else await youtube.play(h.player);
       await playing(command);
