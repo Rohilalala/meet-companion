@@ -1,8 +1,12 @@
 import { playbackBody } from './spotify.js';
 
 export function parseBotCommand(text) {
-  if (typeof text !== 'string' || !/^\/bot(?:\s|$)/i.test(text.trim())) return null;
-  let input = text.trim().replace(/^\/bot\s*/i, '');
+  if (typeof text !== 'string') return null;
+  let input = text.trim();
+  // Discord-style bare commands (/play, /pause, /skip ...) work like /bot play, /bot pause, /bot skip.
+  if (/^\/bot(?:\s|$)/i.test(input)) input = input.replace(/^\/bot\s*/i, '');
+  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|volume|vol|mute|unmute|help|yt|youtube|ytmusic|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
+  else return null;
   if (!input) return { action: 'help' };
   if (/^(pause|resume|stop|mute|unmute|help|skip|queue|np|clear)$/i.test(input)) return { action: input.toLowerCase() };
   if (/^next$/i.test(input)) return { action: 'skip' };
@@ -19,7 +23,8 @@ export function parseBotCommand(text) {
   const prefix = /^(spotify|applemusic|apple|ytmusic|youtube-music|youtube|ytvideo|yt)\s+/i.exec(input);
   const name = prefix?.[1].toLowerCase();
   if (prefix) input = input.slice(prefix[0].length);
-  if (aliases[name] === 'youtube' && name !== 'ytvideo' && !/^["“']?https?:/i.test(input)) {
+  // Plain text (no link) searches YouTube, like Discord's /play <query>.
+  if ((!name || aliases[name] === 'youtube') && name !== 'ytvideo' && !/^["“']?https?:/i.test(input)) {
     if (input.length > 200 || /[\u0000-\u001f\u007f]/.test(input)) throw new Error('BOT_SEARCH_INVALID');
     return { action: 'play', service: 'youtube', mode: 'audio', search: input };
   }

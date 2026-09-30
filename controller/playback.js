@@ -47,7 +47,7 @@ export function playback(h) {
       command.resolved = ytdlp.resolve(ytdlp.target(command));
       command.resolved.then(resolved => { command.title = resolved.title; }, () => {});
     },
-    async help() { await h.driver.sendChat('Meet Companion: /bot <link> or /bot play <link>; /bot spotify <link>, /bot applemusic <link>, /bot youtube <link or search>, /bot yt <search>, /bot ytvideo <link> (video share); /bot skip, queue, np, clear, volume <0-100>, pause, resume, stop, mute, unmute, help. Links queue while something plays; stop clears the queue.'); },
+    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue). /bot <command> also works. /bot ytvideo <link> shares YouTube video.'); },
     async pause() {
       if (!active) throw new Error('NOTHING_PLAYING');
       if (paused) return;
