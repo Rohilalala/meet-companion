@@ -8,7 +8,7 @@ export function playerInit() {
   const routed = new WeakSet(), desiredMuted = new WeakMap();
   const routing = new WeakMap();
   let pausedMedia = null, pausedContexts = [];
-  let error = null, errorName = null;
+  let error = null, errorName = null, level = 1;
   async function device() {
     const outputs = await navigator.mediaDevices.enumerateDevices();
     const match = outputs.find(item => item.kind === 'audiooutput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(item.label));
@@ -31,7 +31,7 @@ export function playerInit() {
         if (!nativeSink) throw new Error('AUDIO_ROUTE_LOST');
         const id = await device();
         if (element.sinkId !== id) await nativeSink.call(element, id);
-        routed.add(element); nativeMuted.set.call(element, desiredMuted.get(element));
+        routed.add(element); nativeMuted.set.call(element, desiredMuted.get(element)); element.volume = level;
       } catch (cause) { errorName = cause.name; throw fail(cause.message); }
     })().finally(() => routing.delete(element));
     routing.set(element, operation);
@@ -110,6 +110,8 @@ export function playerInit() {
   });
   observe(document);
   window.companionRoute = {
+    // ponytail: HTML media only; a player that mixes through Web Audio would need a gain node.
+    volume(value) { level = Math.min(1, Math.max(0, Number(value) || 0)); media.forEach(element => { element.volume = level; }); },
     pause({ detachedOnly = false } = {}) {
       if (pausedMedia) return;
       pausedMedia = [...media].filter(element => !element.paused && !element.ended && (!detachedOnly || !element.isConnected));

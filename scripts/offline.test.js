@@ -129,6 +129,32 @@ test('chat queue: play queues while playing, skip passes broken entries, advance
   await bot.close();
 });
 
+test('volume, replay after stop, and chat replies for failed or unknown commands', async () => {
+  assert.deepEqual(parseBotCommand('/bot volume 40'), { action: 'volume', level: 40 });
+  assert.deepEqual(parseBotCommand('/bot vol 0%'), { action: 'volume', level: 0 });
+  assert.deepEqual(parseBotCommand('/bot volume'), { action: 'volume' });
+  assert.throws(() => parseBotCommand('/bot volume 101'), /BOT_VOLUME_INVALID/);
+  const said = [], started = [], levels = [];
+  const bot = new ChatBot({
+    stop: async () => {}, playAudio: async command => { started.push(command.search); return 'T ' + command.search; },
+    resume: async () => { throw new Error('NOTHING_PLAYING'); }, mute: async () => {},
+    volume: async level => levels.push(level), say: async text => said.push(text), report: () => {},
+  });
+  await bot.receive({ text: '/bot resume' });
+  assert.equal(said.at(-1), 'Nothing is playing. Try /bot yt <song>.');
+  await bot.receive({ text: '/bot volume 30' }); assert.deepEqual(levels, [30]); assert.equal(said.at(-1), 'Volume: 30%');
+  await bot.receive({ text: '/bot volume' }); assert.equal(said.at(-1), 'Volume: 30%');
+  await bot.receive({ text: '/bot yt song' });
+  await bot.receive({ text: '/bot stop' }); assert.equal(bot.current, null);
+  await bot.receive({ text: '/bot play' });
+  assert.deepEqual(started, ['song', 'song'], 'play after stop restarts the last track');
+  assert.equal(bot.current.title, 'T song');
+  await bot.receive({ text: '/bot stop' });
+  await bot.receive({ text: '/bot unmute' }); assert.match(said.at(-1), /mic turns on when something plays/);
+  await bot.receive({ text: '/bot nonsense words' }); assert.match(said.at(-1), /^Didn't understand that \(BOT_LINK_REQUIRED\)/);
+  await bot.close();
+});
+
 test('chat ignores rebuilt message nodes but accepts a new message with the same text', () => {
   let onMutation;
   const received = [];

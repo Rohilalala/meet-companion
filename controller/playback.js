@@ -6,7 +6,7 @@ import * as ytdlp from './ytdlp.js';
 
 export function playback(h) {
   const adapters = { spotify: spotifyPlay, applemusic: applePlay, youtubemusic: musicPlay };
-  let active = null, paused = false, muted = false;
+  let active = null, paused = false, muted = false, level = 1;
   async function stop() {
     // Close the microphone before changing or clearing the player source.
     await h.driver.disableMedia();
@@ -24,6 +24,7 @@ export function playback(h) {
     await h.driver.configureMusicAudio();
     await start();
     await playing(command);
+    await h.player.evaluate(level => window.companionRoute.volume(level), level);
     const raw = await h.meet.evaluate(() => {
       const settings = window.meetCompanion.inputSettings();
       return settings.length > 0 && settings.every(input => input.echoCancellation === false && input.noiseSuppression === false && input.autoGainControl === false);
@@ -36,13 +37,17 @@ export function playback(h) {
   return {
     stop,
     say: text => h.driver.sendChat(text),
+    async volume(percent) {
+      level = percent / 100;
+      if (active) await h.player.evaluate(level => window.companionRoute.volume(level), level);
+    },
     // Resolve the next YouTube entry ahead of time (title for /bot queue, faster start, early failure).
     prefetch(command) {
       if (command?.mode !== 'audio' || command.resolved) return;
       command.resolved = ytdlp.resolve(ytdlp.target(command));
       command.resolved.then(resolved => { command.title = resolved.title; }, () => {});
     },
-    async help() { await h.driver.sendChat('Meet Companion: /bot <link> or /bot play <link>; /bot spotify <link>, /bot applemusic <link>, /bot youtube <link or search>, /bot yt <search>, /bot ytvideo <link> (video share); /bot skip, queue, np, clear, pause, resume, stop, mute, unmute, help. Links queue while something plays; stop clears the queue.'); },
+    async help() { await h.driver.sendChat('Meet Companion: /bot <link> or /bot play <link>; /bot spotify <link>, /bot applemusic <link>, /bot youtube <link or search>, /bot yt <search>, /bot ytvideo <link> (video share); /bot skip, queue, np, clear, volume <0-100>, pause, resume, stop, mute, unmute, help. Links queue while something plays; stop clears the queue.'); },
     async pause() {
       if (!active) throw new Error('NOTHING_PLAYING');
       if (paused) return;
@@ -68,18 +73,14 @@ export function playback(h) {
     playMusic: command => startMusic(command, () => adapters[command.service](h.player, command.link)),
     async playAudio(command) {
       let title;
-      try {
-        await startMusic(command, async () => {
+      await startMusic(command, async () => {
           const resolved = await (command.resolved ?? ytdlp.resolve(ytdlp.target(command)));
           title = resolved.title;
           // Always the local no-store stream: Chrome caches direct googlevideo audio in the bot profile, even with DevTools cache disabled.
           await load(h.server.origin + '/stream/' + h.server.streamOnce(resolved.link, resolved.ext));
-        });
-      } catch (error) {
-        await h.driver.sendChat('Meet Companion: ' + (/^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED')).catch(() => {});
-        throw error;
-      }
-      await h.driver.sendChat('Playing: ' + title);
+      });
+      // Best-effort: a chat failure must not stop music that is already playing.
+      await h.driver.sendChat('Playing: ' + title).catch(() => {});
       return title;
     },
     async playVideo(command) {
@@ -87,6 +88,7 @@ export function playback(h) {
       await h.driver.present();
       await youtube.play(h.player);
       await playing(command);
+      await h.player.evaluate(level => window.companionRoute.volume(level), level);
       if (!(await h.driver.muted())) throw new Error('PRESENTATION_MIC_NOT_MUTED');
       active = command;
       await h.meet.evaluate(muted => window.companionPresentation.mute(muted), muted);

@@ -6,6 +6,13 @@ export function parseBotCommand(text) {
   if (!input) return { action: 'help' };
   if (/^(pause|resume|stop|mute|unmute|help|skip|queue|np|clear)$/i.test(input)) return { action: input.toLowerCase() };
   if (/^next$/i.test(input)) return { action: 'skip' };
+  const volume = /^vol(?:ume)?(?:\s+(\d{1,3})%?)?$/i.exec(input);
+  if (volume) {
+    if (volume[1] === undefined) return { action: 'volume' };
+    const level = Number(volume[1]);
+    if (level > 100) throw new Error('BOT_VOLUME_INVALID');
+    return { action: 'volume', level };
+  }
   if (/^play$/i.test(input)) return { action: 'resume' };
   input = input.replace(/^play\s+/i, '');
   const aliases = { spotify: 'spotify', applemusic: 'applemusic', apple: 'applemusic', ytmusic: 'youtube', 'youtube-music': 'youtube', youtube: 'youtube', yt: 'youtube', ytvideo: 'youtube' };
@@ -59,6 +66,7 @@ function parseLink(link, video) {
 
 const code = error => /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED';
 const where = error => error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [];
+const hints = { NOTHING_PLAYING: 'Nothing is playing. Try /bot yt <song>.', QUEUE_FULL: 'The queue is full (20).' };
 const names = { spotify: 'Spotify link', applemusic: 'Apple Music link', youtube: 'YouTube link' };
 // Chat labels never echo links: a resolved title, the search text, or the service name.
 const label = command => command.title ?? (command.search ? `"${command.search}"` : command.mode === 'presentation' ? 'YouTube video' : names[command.service]);
@@ -66,16 +74,19 @@ const label = command => command.title ?? (command.search ? `"${command.search}"
 // Commands are serialized so two chat callbacks cannot overlap audio routes.
 // Queue semantics follow Discord music bots: play queues while something plays, skip advances past broken entries, stop clears.
 export class ChatBot {
-  constructor({ stop, playMusic, playAudio, playVideo, pause, resume, mute, help, say = async () => {}, prefetch = () => {}, report }) {
-    Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, help, say, prefetch, report });
+  constructor({ stop, playMusic, playAudio, playVideo, pause, resume, mute, volume = async () => {}, help, say = async () => {}, prefetch = () => {}, report }) {
+    Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, volume, help, say, prefetch, report });
     this.pending = Promise.resolve(); this.closed = false;
-    this.busy = false; this.queue = []; this.current = null;
+    this.busy = false; this.queue = []; this.current = null; this.last = null; this.level = 100;
   }
   receive(message) {
     if (this.closed) return this.pending;
     let command;
     try { command = parseBotCommand(message.text); }
-    catch (error) { this.report({ result: 'REJECTED', error: error.message }); return this.pending; }
+    catch (error) {
+      this.report({ result: 'REJECTED', error: error.message });
+      return this.run(() => this.say(`Didn't understand that (${error.message}). Try /bot help.`).catch(() => {}));
+    }
     if (!command) return this.pending;
     return this.run(() => this.apply(command));
   }
@@ -102,16 +113,26 @@ export class ChatBot {
         return await this.say(`Queued #${this.queue.length}: ${label(command)}`);
       }
       if (action === 'skip') return await this.next();
-      if (action === 'stop') { this.queue = []; this.current = null; await this.stop(); }
+      // After stop, a bare play/resume restarts the last track from the beginning.
+      if (action === 'resume' && !this.current && this.last) return await this.next(this.last);
+      if (action === 'stop') { this.last = this.current ?? this.last; this.queue = []; this.current = null; await this.stop(); }
+      else if (action === 'volume') {
+        if (command.level !== undefined) { await this.volume(command.level); this.level = command.level; }
+        await this.say(`Volume: ${this.level}%`);
+      }
       else if (action === 'clear') { this.queue = []; await this.say('Queue cleared.'); }
       else if (action === 'queue') await this.say(this.queue.length ? 'Queue: ' + this.queue.slice(0, 10).map((entry, i) => `${i + 1}. ${label(entry)}`).join(' · ') + (this.queue.length > 10 ? ` · +${this.queue.length - 10} more` : '') : 'Queue is empty.');
       else if (action === 'np') await this.say(this.current ? `Now playing: ${label(this.current)}` : 'Nothing is playing.');
-      else if (action === 'mute' || action === 'unmute') await this.mute(action === 'mute');
+      else if (action === 'mute' || action === 'unmute') {
+        await this.mute(action === 'mute');
+        if (action === 'unmute' && !this.current) await this.say('The mic turns on when something plays. Try /bot yt <song>.');
+      }
       else await this[action]();
       this.report({ result: 'APPLIED', action });
     } catch (error) {
       // A failed control command reports only; it no longer stops healthy playback.
       this.report({ result: 'ERROR', action, service: command.service, error: code(error), sourceLocations: where(error) });
+      await this.say(hints[code(error)] ?? `Couldn't ${action}: ${code(error)}`).catch(() => {});
     }
   }
   // Starts `first`, or the head of the queue; broken entries are reported and skipped.
@@ -128,6 +149,7 @@ export class ChatBot {
       } catch (error) {
         await this.stop().catch(() => {});
         this.report({ result: 'ERROR', action: 'play', service: command.service, error: code(error), sourceLocations: where(error) });
+        await this.say(`Couldn't play ${label(command)}: ${code(error)}`).catch(() => {});
         command = this.queue.shift();
       }
     }
