@@ -14,7 +14,7 @@ if (!live) {
     // `--meeting <link>` joins another meeting than the saved one (validated by meetingURL).
     const meeting = process.argv.indexOf('--meeting');
     stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink);
-    bot = new ChatBot({ ...playback(h), report: observation => emit('BOT', observation) });
+    bot = new ChatBot({ ...playback(h), leave: async () => { interrupted = true; }, report: observation => emit('BOT', observation) });
     // Right after joining, Meet popups can cover the chat controls: dismiss and retry.
     stage = 'chat';
     for (let attempt = 1; ; attempt++) {
@@ -41,7 +41,7 @@ if (!live) {
       }
     }
   } catch (error) {
-    emit('BOT', { result: 'STOPPED', stage, error: errorCode(error), errorType: ['Error', 'TypeError', 'ReferenceError', 'TimeoutError'].includes(error.name) ? error.name : 'Other', sourceLocations: error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [] });
+    emit('BOT', { result: 'STOPPED', stage, error: errorCode(error), errorType: ['Error', 'TypeError', 'ReferenceError', 'TimeoutError'].includes(error.name) ? error.name : 'Other', sourceLocations: error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [], chromeExit: h?.chromeExit?.() });
     process.exitCode = 1;
   }
   // Leave explicitly: closing Chrome alone leaves a ghost participant that changes the next join screen.

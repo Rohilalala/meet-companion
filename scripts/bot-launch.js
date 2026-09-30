@@ -63,7 +63,9 @@ export async function launchBot({ headless = true, presentation = false } = {}) 
     const meet = await context.newPage();
     const player = await context.newPage();
     for (const page of context.pages()) if (page !== meet && page !== player) await page.close();
-    return { config, browser, context, meet, player, close, presentationTitle, observation: { headless, loopbackOnly: true, attached: true, chromeVersion: browser.version(), tabs: 2 } };
+    // How Chrome ended (exit code or signal), for diagnosing unexpected BROWSER_CRASHED stops.
+    const chromeExit = () => ({ code: child.exitCode, signal: child.signalCode });
+    return { config, browser, context, meet, player, close, chromeExit, presentationTitle, observation: { headless, loopbackOnly: true, attached: true, chromeVersion: browser.version(), tabs: 2 } };
   } catch (error) { await close(); throw error; }
 }
 

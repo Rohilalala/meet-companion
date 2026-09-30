@@ -7,7 +7,7 @@ import { meetingURL } from '../controller/meet-driver.js';
 
 // Always-on local launcher: a control page that starts the bot for a Meet link and stops it.
 // Loopback only; the API also needs a custom header, which cross-site pages cannot send without a CORS preflight we never grant.
-const kept = ['observedAt', 'state', 'result', 'action', 'service', 'mode', 'position', 'error', 'stage'];
+const kept = ['observedAt', 'state', 'result', 'action', 'service', 'mode', 'position', 'error', 'stage', 'errorType', 'sourceLocations', 'chromeExit'];
 const botRun = fileURLToPath(new URL('./bot-run.js', import.meta.url));
 
 export function startControl({ port = 3211, savedLink, spawnBot = link => spawn(process.execPath, [botRun, '--live', '--meeting', link], { stdio: ['ignore', 'pipe', 'ignore'] }) } = {}) {
@@ -90,7 +90,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}bu
 <script nonce="${nonce}">
 const $ = id => document.getElementById(id);
 const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { 'X-Companion': '1', 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }).then(r => r.json());
-const describe = e => [e.state, e.result, e.action, e.service, e.mode, e.error].filter(Boolean).join(' · ');
+const describe = e => [e.state, e.result, e.action, e.service, e.mode, e.error, e.stage && 'at ' + e.stage, e.sourceLocations?.[0], e.chromeExit && 'chrome ' + (e.chromeExit.signal ?? 'exit ' + e.chromeExit.code)].filter(Boolean).join(' · ');
 async function refresh() {
   try {
     const s = await api('/status');

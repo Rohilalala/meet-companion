@@ -117,6 +117,8 @@ test('/bot distinguishes music, YouTube audio and ytvideo presentation, and reje
   assert.deepEqual(parseBotCommand('/play'), { action: 'resume' });
   assert.deepEqual(parseBotCommand('/volume 30'), { action: 'volume', level: 30 });
   for (const text of ['/playlist', '/shrug', '/me waves', 'play fein']) assert.equal(parseBotCommand(text), null, text);
+  for (const [text, action] of [['/bot exit', 'leave'], ['/leave', 'leave'], ['/exit now', 'leave'], ['/stop now', 'stop'], ['/help me', 'help'], ['/skip 2', 'skip'], ['/bot pause pls', 'pause']]) assert.deepEqual(parseBotCommand(text), { action }, text);
+  assert.deepEqual(parseBotCommand('/play stop this train'), { action: 'play', service: 'youtube', mode: 'audio', search: 'stop this train' });
   assert.throws(() => parseBotCommand('/bot https://www.youtube.com/playlist?list=PLabc'), /BOT_PLAYLIST_UNSUPPORTED/);
   assert.throws(() => parseBotCommand('/bot yt ' + 'x'.repeat(201)), /BOT_SEARCH_INVALID/);
   assert.throws(() => parseBotCommand('/bot spotify https://youtu.be/abcdefghijk'), /BOT_SERVICE_LINK_MISMATCH/);
@@ -198,6 +200,8 @@ test('volume, replay after stop, and chat replies for failed or unknown commands
   assert.equal(bot.current.title, 'T song');
   await bot.receive({ text: '/bot stop' });
   await bot.receive({ text: '/bot unmute' }); assert.match(said.at(-1), /mic turns on when something plays/);
+  let left = false; bot.leave = async () => { left = true; };
+  await bot.receive({ text: '/exit' }); assert.equal(left, true); assert.equal(said.at(-1), 'Leaving the call. Bye!');
   await bot.receive({ text: '/bot https://example.com/song' }); assert.match(said.at(-1), /^Didn't understand that \(BOT_SERVICE_UNSUPPORTED\)/);
   await bot.close();
 });

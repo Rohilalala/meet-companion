@@ -5,11 +5,12 @@ export function parseBotCommand(text) {
   let input = text.trim();
   // Discord-style bare commands (/play, /pause, /skip ...) work like /bot play, /bot pause, /bot skip.
   if (/^\/bot(?:\s|$)/i.test(input)) input = input.replace(/^\/bot\s*/i, '');
-  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|volume|vol|mute|unmute|help|yt|youtube|ytmusic|video|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
+  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|leave|exit|volume|vol|mute|unmute|help|yt|youtube|ytmusic|video|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
   else return null;
   if (!input) return { action: 'help' };
-  if (/^(pause|resume|stop|mute|unmute|help|skip|queue|np|clear)$/i.test(input)) return { action: input.toLowerCase() };
-  if (/^next$/i.test(input)) return { action: 'skip' };
+  // Control words win even with extra text ("/stop now", "/bot exit"), so they never turn into YouTube searches.
+  const control = /^(pause|resume|stop|mute|unmute|help|skip|next|queue|np|clear|leave|exit)(?:\s|$)/i.exec(input);
+  if (control) { const word = control[1].toLowerCase(); return { action: { next: 'skip', exit: 'leave' }[word] ?? word }; }
   const volume = /^vol(?:ume)?(?:\s+(\d{1,3})%?)?$/i.exec(input);
   if (volume) {
     if (volume[1] === undefined) return { action: 'volume' };
@@ -82,8 +83,8 @@ const label = command => command.title ?? (command.search ? `"${command.search}"
 // Commands are serialized so two chat callbacks cannot overlap audio routes.
 // Queue semantics follow Discord music bots: play queues while something plays, skip advances past broken entries, stop clears.
 export class ChatBot {
-  constructor({ stop, playMusic, playAudio, playVideo, pause, resume, mute, volume = async () => {}, help, say = async () => {}, prefetch = () => {}, report }) {
-    Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, volume, help, say, prefetch, report });
+  constructor({ stop, playMusic, playAudio, playVideo, pause, resume, mute, volume = async () => {}, help, say = async () => {}, prefetch = () => {}, leave = async () => {}, report }) {
+    Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, volume, help, say, prefetch, leave, report });
     this.pending = Promise.resolve(); this.closed = false;
     this.busy = false; this.queue = []; this.current = null; this.last = null; this.level = 100;
   }
@@ -121,6 +122,8 @@ export class ChatBot {
         return await this.say(`Queued #${this.queue.length}: ${label(command)}`);
       }
       if (action === 'skip') return await this.next();
+      // ponytail: any participant can make the bot leave; owner-only needs the PIN check.
+      if (action === 'leave') { await this.say('Leaving the call. Bye!').catch(() => {}); await this.leave(); this.report({ result: 'APPLIED', action }); return; }
       // After stop, a bare play/resume restarts the last track from the beginning.
       if (action === 'resume' && !this.current && this.last) return await this.next(this.last);
       if (action === 'stop') { this.last = this.current ?? this.last; this.queue = []; this.current = null; await this.stop(); }

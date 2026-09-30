@@ -50,7 +50,7 @@ export function playback(h) {
       command.resolved = ytdlp.resolve(ytdlp.target(command), { kind: command.dlp ? 'video' : 'audio' });
       command.resolved.then(resolved => { command.title = resolved.title; }, () => {});
     },
-    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue). /video <link or search> shares a YouTube video. /bot <command> also works.'); },
+    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue), /leave. /video <link or search> shares a YouTube video. /bot <command> also works.'); },
     async pause() {
       if (!active) throw new Error('NOTHING_PLAYING');
       if (paused) return;
