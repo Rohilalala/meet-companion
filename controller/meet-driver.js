@@ -42,6 +42,8 @@ export function meetingURL(value) {
 
 export class MeetDriver {
   constructor(page) { this.page = page; this.chatReady = false; }
+  // Meet hides its toolbar after a few idle seconds; hidden controls fail visibility checks and clicks (Vexa does the same).
+  async reveal() { await this.page.mouse?.move(600, 400); await this.page.mouse?.move(640, 420); }
   async googleSession() {
     if (new URL(this.page.url()).hostname === 'accounts.google.com') return 'signed_out';
     if (await this.page.locator(selectors.googleAccount).first().isVisible()) return 'signed_in';
@@ -64,6 +66,7 @@ export class MeetDriver {
   }
   async disableMedia() {
     try {
+      await this.reveal();
       for (const [on, off] of [[selectors.muteControl, selectors.unmuteControl], [selectors.cameraOffControl, selectors.cameraOnControl]]) {
         await this.page.locator(`${on}, ${off}`).first().waitFor({ state: 'visible', timeout: 15000 });
         const button = this.page.locator(on).first();
@@ -99,7 +102,7 @@ export class MeetDriver {
     throw new Error('ADMISSION_TIMEOUT');
   }
   async unmute() {
-    await this.page.bringToFront();
+    await this.page.bringToFront(); await this.reveal();
     const button = this.page.locator(selectors.unmuteControl).first();
     if (await button.isVisible()) await button.click({ timeout: 5000 });
     await this.page.locator(selectors.muteControl).first().waitFor({ timeout: 10000 }).catch(() => { throw new Error('MIC_STATE_UNVERIFIED'); });
@@ -107,6 +110,7 @@ export class MeetDriver {
   async configureMusicAudio() {
     // Filters stay off for the rest of the call; reopening settings each track was slow and closed the chat panel.
     if (this.audioConfigured) return;
+    await this.reveal();
     await this.page.locator(selectors.moreOptions).click({ timeout: 10000 });
     await this.page.getByRole('menuitem', { name: selectors.settingsMenu }).click();
     await this.page.getByRole('tab', { name: selectors.audioTab, exact: true }).click();
@@ -130,6 +134,7 @@ export class MeetDriver {
     if (!state.active || !state.audio || state.error) throw new Error('PRESENTATION_FAILED');
   }
   async stopPresenting() {
+    await this.reveal();
     const indicator = this.page.locator(selectors.presenting);
     if (await indicator.isVisible()) {
       const stop = this.page.getByRole('button', { name: selectors.stopPresenting });
@@ -139,13 +144,14 @@ export class MeetDriver {
     }
     await this.page.evaluate(() => window.companionPresentation?.stop());
   }
-  async muted() { return this.page.locator(selectors.unmuteControl).first().isVisible(); }
+  async muted() { await this.reveal(); return this.page.locator(selectors.unmuteControl).first().isVisible(); }
   async camera(on) {
     const button = this.page.getByRole('button', { name: on ? selectors.cameraOn : selectors.cameraOff }).first();
     if (await button.isVisible()) await button.click();
     await this.page.getByRole('button', { name: on ? selectors.cameraOff : selectors.cameraOn }).first().waitFor({ timeout: 5000 });
   }
   async leave() {
+    await this.reveal();
     const button = this.page.locator(selectors.leaveControl).first();
     if (await button.isVisible()) await button.evaluate(button => button.click());
     await button.waitFor({ state: 'hidden', timeout: 5000 });
@@ -153,6 +159,7 @@ export class MeetDriver {
   async openChat(onMessage = () => {}) {
     try {
       if (!(await this.page.locator(selectors.messageInput).first().isVisible())) {
+        await this.reveal();
         const button = this.page.locator(selectors.chatControl).first();
         if (await button.isVisible()) await button.evaluate(button => button.click());
         else {
