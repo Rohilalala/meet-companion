@@ -5,7 +5,7 @@ export function parseBotCommand(text) {
   let input = text.trim();
   // Discord-style bare commands (/play, /pause, /skip ...) work like /bot play, /bot pause, /bot skip.
   if (/^\/bot(?:\s|$)/i.test(input)) input = input.replace(/^\/bot\s*/i, '');
-  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|volume|vol|mute|unmute|help|yt|youtube|ytmusic|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
+  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|volume|vol|mute|unmute|help|yt|youtube|ytmusic|video|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
   else return null;
   if (!input) return { action: 'help' };
   if (/^(pause|resume|stop|mute|unmute|help|skip|queue|np|clear)$/i.test(input)) return { action: input.toLowerCase() };
@@ -19,23 +19,25 @@ export function parseBotCommand(text) {
   }
   if (/^play$/i.test(input)) return { action: 'resume' };
   input = input.replace(/^play\s+/i, '');
-  const aliases = { spotify: 'spotify', applemusic: 'applemusic', apple: 'applemusic', ytmusic: 'youtube', 'youtube-music': 'youtube', youtube: 'youtube', yt: 'youtube', ytvideo: 'youtube' };
-  const prefix = /^(spotify|applemusic|apple|ytmusic|youtube-music|youtube|ytvideo|yt)\s+/i.exec(input);
+  const aliases = { spotify: 'spotify', applemusic: 'applemusic', apple: 'applemusic', ytmusic: 'youtube', 'youtube-music': 'youtube', youtube: 'youtube', yt: 'youtube', ytvideo: 'youtube', video: 'youtube', ytweb: 'youtube' };
+  const prefix = /^(spotify|applemusic|apple|ytmusic|youtube-music|youtube|ytvideo|video|ytweb|yt)\s+/i.exec(input);
   const name = prefix?.[1].toLowerCase();
   if (prefix) input = input.slice(prefix[0].length);
+  // YouTube kinds: yt-dlp audio (default), yt-dlp video presented as a tab (video/ytvideo), or the YouTube web player (ytweb).
+  const kind = name === 'ytweb' ? 'web' : name === 'ytvideo' || name === 'video' ? 'video' : 'audio';
   // Plain text (no link) searches YouTube, like Discord's /play <query>.
-  if ((!name || aliases[name] === 'youtube') && name !== 'ytvideo' && !/^["“']?https?:/i.test(input)) {
+  if ((!name || aliases[name] === 'youtube') && kind !== 'web' && !/^["“']?https?:/i.test(input)) {
     if (input.length > 200 || /[\u0000-\u001f\u007f]/.test(input)) throw new Error('BOT_SEARCH_INVALID');
-    return { action: 'play', service: 'youtube', mode: 'audio', search: input };
+    return { action: 'play', service: 'youtube', ...(kind === 'video' ? { mode: 'presentation', dlp: true } : { mode: 'audio' }), search: input };
   }
   const match = /^(?:["“]([^"”\s]+)["”]|'([^'\s]+)'|([^\s]+))$/.exec(input);
   if (!match) throw new Error('BOT_LINK_REQUIRED');
-  const command = parseLink(match[1] ?? match[2] ?? match[3], name === 'ytvideo');
+  const command = parseLink(match[1] ?? match[2] ?? match[3], kind);
   if (prefix && command.service !== aliases[name]) throw new Error('BOT_SERVICE_LINK_MISMATCH');
   return { action: 'play', ...command };
 }
 
-function parseLink(link, video) {
+function parseLink(link, kind = 'audio') {
   let url;
   try { url = new URL(link); } catch { throw new Error('BOT_LINK_INVALID'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.port) throw new Error('BOT_LINK_INVALID');
@@ -56,10 +58,11 @@ function parseLink(link, video) {
     if (id && !/^[\w-]{11}$/.test(id)) throw new Error('BOT_LINK_INVALID');
     if (!id && !(url.pathname === '/playlist' && list)) throw new Error('BOT_LINK_INVALID');
     if (list && !/^[\w-]+$/.test(list)) throw new Error('BOT_LINK_INVALID');
-    // Audio goes through yt-dlp (one video only); ytvideo keeps native tab sharing.
-    if (!video) {
+    // yt-dlp audio and video take one video only; ytweb keeps the YouTube web-player tab share.
+    if (kind !== 'web') {
       if (!id) throw new Error('BOT_PLAYLIST_UNSUPPORTED');
-      return { service: 'youtube', mode: 'audio', link: 'https://www.youtube.com/watch?v=' + id };
+      const link = 'https://www.youtube.com/watch?v=' + id;
+      return kind === 'video' ? { service: 'youtube', mode: 'presentation', dlp: true, link } : { service: 'youtube', mode: 'audio', link };
     }
     const canonical = new URL('https://www.youtube.com' + (id ? '/watch' : '/playlist'));
     if (id) canonical.searchParams.set('v', id);

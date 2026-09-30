@@ -37,11 +37,11 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
         if (request.headers['sec-fetch-site'] === 'cross-site' || (request.headers.origin && request.headers.origin !== origin)) return send(403, 'ORIGIN_REFUSED');
         const entry = streams.take(url.pathname.slice(8));
         if (!entry) return send(404, 'MEDIA_UNAVAILABLE');
-        const child = stream(entry.target); children.add(child);
+        const child = stream(entry.target, entry.kind); children.add(child);
         const end = () => { child.kill('SIGKILL'); children.delete(child); };
         child.on('error', () => { end(); response.destroy(); }); child.on('close', () => children.delete(child));
         response.on('close', end);
-        response.writeHead(200, { 'Content-Type': entry.ext === 'webm' ? 'audio/webm' : 'audio/mp4' });
+        response.writeHead(200, { 'Content-Type': `${entry.kind === 'video' ? 'video' : 'audio'}/${entry.ext === 'webm' ? 'webm' : 'mp4'}` });
         child.stdout.pipe(response); return;
       }
       if (url.pathname === '/player') {
@@ -87,7 +87,7 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
       if (!type) throw new Error('MEDIA_UNAVAILABLE');
       const id = randomBytes(16).toString('hex'); files.set(id, { path, type }); return id;
     },
-    streamOnce(target, ext) { return streams.add({ target, ext }); },
+    streamOnce(target, ext, kind = 'audio') { return streams.add({ target, ext, kind }); },
     stopStreams,
     async close() { stopStreams(); process.removeListener('exit', stopStreams); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); },
   };

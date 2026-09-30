@@ -43,11 +43,11 @@ export function playback(h) {
     },
     // Resolve the next YouTube entry ahead of time (title for /bot queue, faster start, early failure).
     prefetch(command) {
-      if (command?.mode !== 'audio' || command.resolved) return;
-      command.resolved = ytdlp.resolve(ytdlp.target(command));
+      if (!(command?.mode === 'audio' || command?.dlp) || command.resolved) return;
+      command.resolved = ytdlp.resolve(ytdlp.target(command), { kind: command.dlp ? 'video' : 'audio' });
       command.resolved.then(resolved => { command.title = resolved.title; }, () => {});
     },
-    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue). /bot <command> also works. /bot ytvideo <link> shares YouTube video.'); },
+    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue). /video <link or search> shares a YouTube video. /bot <command> also works.'); },
     async pause() {
       if (!active) throw new Error('NOTHING_PLAYING');
       if (paused) return;
@@ -84,14 +84,25 @@ export function playback(h) {
       return title;
     },
     async playVideo(command) {
-      await youtube.prepare(h.player, command.link, h.presentationTitle);
+      let title;
+      if (command.dlp) {
+        // yt-dlp video in the bot's own /player page (no YouTube page), loaded paused so the tab is presented first.
+        const resolved = await (command.resolved ?? ytdlp.resolve(ytdlp.target(command), { kind: 'video' }));
+        title = resolved.title;
+        await h.player.setViewportSize({ width: 1920, height: 1080 });
+        const src = h.server.origin + '/stream/' + h.server.streamOnce(resolved.link, resolved.ext, 'video');
+        await h.player.evaluate(({ src, title }) => window.companionPlayer.video(src, title), { src, title: h.presentationTitle });
+      } else await youtube.prepare(h.player, command.link, h.presentationTitle);
       await h.driver.present();
-      await youtube.play(h.player);
+      if (command.dlp) await h.player.evaluate(() => window.companionPlayer.start());
+      else await youtube.play(h.player);
       await playing(command);
       await h.player.evaluate(level => window.companionRoute.volume(level), level);
       if (!(await h.driver.muted())) throw new Error('PRESENTATION_MIC_NOT_MUTED');
       active = command;
       await h.meet.evaluate(muted => window.companionPresentation.mute(muted), muted);
+      if (title) await h.driver.sendChat('Playing: ' + title).catch(() => {});
+      return title;
     },
   };
 }

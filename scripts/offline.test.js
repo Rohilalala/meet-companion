@@ -22,6 +22,13 @@ test('yt-dlp arguments are anonymous, single-video, audio-only, and end option p
     }
   }
   assert.equal(ytdlpTarget({ search: 'bairi piya' }), 'ytsearch1:bairi piya');
+  for (const build of [resolveArgs, streamArgs]) {
+    const args = build('x', 'video');
+    for (const flag of ['--ignore-config', '--no-cookies', '--no-cookies-from-browser', '--no-cache-dir', '--no-playlist']) assert.ok(args.includes(flag), flag);
+    assert.equal(args[args.indexOf('-f') + 1], 'bv*[height<=720][ext=webm]+ba[ext=webm]');
+    assert.equal(args[args.indexOf('--merge-output-format') + 1], 'webm');
+    assert.equal(args.at(-2), '--');
+  }
   assert.deepEqual(streamArgs('x').slice(-4), ['-o', '-', '--', 'x']);
 });
 
@@ -66,10 +73,13 @@ test('/bot distinguishes music, YouTube audio and ytvideo presentation, and reje
   for (const alias of ['youtube', 'yt', 'ytmusic', 'youtube-music']) {
     assert.deepEqual(parseBotCommand(`/bot ${alias} https://www.youtube.com/watch?v=abcdefghijk&list=RDabc`), { action: 'play', service: 'youtube', mode: 'audio', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
   }
-  assert.deepEqual(parseBotCommand('/bot ytvideo https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  assert.deepEqual(parseBotCommand('/bot ytvideo https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', dlp: true, link: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  assert.deepEqual(parseBotCommand('/video https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', dlp: true, link: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  assert.deepEqual(parseBotCommand('/video bairi piya'), { action: 'play', service: 'youtube', mode: 'presentation', dlp: true, search: 'bairi piya' });
+  assert.deepEqual(parseBotCommand('/bot ytweb https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
+  assert.throws(() => parseBotCommand('/bot ytweb bairi piya'), /BOT_LINK_REQUIRED/);
   assert.deepEqual(parseBotCommand('/bot yt bairi piya shreya'), { action: 'play', service: 'youtube', mode: 'audio', search: 'bairi piya shreya' });
   assert.deepEqual(parseBotCommand('/bot play yt --cookies x'), { action: 'play', service: 'youtube', mode: 'audio', search: '--cookies x' });
-  assert.throws(() => parseBotCommand('/bot ytvideo bairi piya'), /BOT_LINK_REQUIRED/);
   assert.deepEqual(parseBotCommand('/bot play fein travis'), { action: 'play', service: 'youtube', mode: 'audio', search: 'fein travis' });
   assert.deepEqual(parseBotCommand('/play fein travis'), { action: 'play', service: 'youtube', mode: 'audio', search: 'fein travis' });
   assert.deepEqual(parseBotCommand('/play https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'audio', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
@@ -91,7 +101,7 @@ test('chat playback serializes source changes, stops on failure, and never repor
     report: result => reports.push(result),
   });
   bot.receive({ text: '/bot https://open.spotify.com/track/fixture123' });
-  await bot.receive({ text: '/bot ytvideo https://youtu.be/abcdefghijk' });
+  await bot.receive({ text: '/bot ytweb https://youtu.be/abcdefghijk' });
   assert.deepEqual(events, ['stop', 'spotify', 'stop', 'stop', 'youtube']);
   assert.deepEqual(reports.map(report => report.result), ['ERROR', 'STARTED']);
   assert.equal(JSON.stringify(reports).includes('https'), false);

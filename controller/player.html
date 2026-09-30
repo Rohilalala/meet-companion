@@ -1,13 +1,14 @@
 <!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Meet Companion diagnostic player</title>
-<style>body{font:18px system-ui;max-width:720px;margin:60px auto;padding:24px;background:#131821;color:#f3f5f8}button{font:inherit;margin:6px;padding:12px}audio{display:block;margin:24px 0;width:100%}output{display:block;white-space:pre-wrap}</style>
+<style>body{font:18px system-ui;max-width:720px;margin:60px auto;padding:24px;background:#131821;color:#f3f5f8}button{font:inherit;margin:6px;padding:12px}audio{display:block;margin:24px 0;width:100%}video{display:none;position:fixed;inset:0;width:100vw;height:100vh;object-fit:contain;background:#000}body.video video{display:block}output{display:block;white-space:pre-wrap}</style>
 <h1>Meet Companion</h1><p>Phase 0 diagnostic player</p>
 <button id="tone">440 Hz · 60 seconds</button><button id="beep">1 kHz beep</button><button id="stop">Stop</button>
-<audio id="audio" controls></audio><output id="status">Ready</output>
+<audio id="audio" controls></audio><video id="video" playsinline></video><output id="status">Ready</output>
 <script nonce="__NONCE__">
 const allowDefaultTone = __DEFAULT_ALLOWED__;
-const audio = document.querySelector('audio');
+const audio = document.querySelector('audio'), video = document.querySelector('video');
+let media = audio;
 const output = document.querySelector('output');
 let blobURL, timer, epoch, beeps = 0, maxDispatchLatenessMs = 0;
 function wav(frequency, seconds) {
@@ -24,7 +25,7 @@ function wav(frequency, seconds) {
   }
   return new Blob([bytes], { type: 'audio/wav' });
 }
-function stop() { clearTimeout(timer); epoch = null; audio.pause(); audio.currentTime = 0; }
+function stop() { clearTimeout(timer); epoch = null; audio.pause(); audio.currentTime = 0; video.pause(); video.removeAttribute('src'); document.body.classList.remove('video'); media = audio; }
 async function routed(kind) {
   if (allowDefaultTone && kind === 'tone') return;
   if (!window.companionRoute) throw new Error('BLACKHOLE_ROUTING_REQUIRED');
@@ -40,6 +41,9 @@ window.companionPlayer = {
   async tone() { stop(); await routed('tone'); await source(wav(440, 60)); },
   async beep() { stop(); await routed('beep'); await source(wav(1000, 0.1)); },
   async url(src) { stop(); await routed('file'); audio.src = src; await audio.play(); },
+  // Loads full-viewport video paused, so the tab can be presented before playback starts.
+  async video(src, title) { stop(); await routed('file'); document.title = title; document.body.classList.add('video'); media = video; video.src = src; },
+  start() { return media.play(); },
   async file(id) { stop(); await routed('file'); audio.src = '/player?file=' + encodeURIComponent(id); await audio.play(); },
   async camtest(startAt) {
     stop(); await routed('beep'); epoch = startAt; beeps = 0; maxDispatchLatenessMs = 0;
@@ -57,7 +61,7 @@ window.companionPlayer = {
     timer = setTimeout(tick, Math.max(0, startAt - Date.now()));
   },
   stop,
-  status() { return { paused: audio.paused, ended: audio.ended, currentTime: audio.currentTime, duration: Number.isFinite(audio.duration) ? audio.duration : null, readyState: audio.readyState, sinkSelected: !!audio.sinkId, diagnosticDefaultTone: allowDefaultTone, beeps, maxDispatchLatenessMs, mediaError: audio.error?.code ?? null }; },
+  status() { return { paused: media.paused, ended: media.ended, currentTime: media.currentTime, duration: Number.isFinite(media.duration) ? media.duration : null, readyState: media.readyState, sinkSelected: !!media.sinkId, diagnosticDefaultTone: allowDefaultTone, beeps, maxDispatchLatenessMs, mediaError: media.error?.code ?? null }; },
 };
 for (const name of ['tone', 'beep', 'stop']) document.getElementById(name).onclick = async () => {
   try { await window.companionPlayer[name](); output.textContent = name === 'stop' ? 'Stopped' : 'Playing'; }

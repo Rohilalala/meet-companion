@@ -33,8 +33,8 @@ if (!live) {
         try {
           const route = await h.player.evaluate(() => window.companionRoute?.status());
           if (route?.error) throw new Error('AUDIO_ROUTE_LOST');
-          // yt-dlp audio plays in /player; advance the queue when its track ends.
-          if (bot.current?.mode === 'audio' && await h.player.evaluate(() => window.companionPlayer?.status().ended ?? false)) await bot.advance();
+          // yt-dlp audio and video play in /player; advance the queue when the track ends.
+          if ((bot.current?.mode === 'audio' || bot.current?.dlp) && await h.player.evaluate(() => window.companionPlayer?.status().ended ?? false)) await bot.advance();
         } catch (error) {
           if (!/Execution context was destroyed|Cannot find context with specified id/i.test(error.message)) throw error;
         }
