@@ -23,7 +23,6 @@ export const selectors = {
   presenting: 'button[aria-label="You are presenting"]',
   stopPresenting: /Stop presenting/i,
   messageInput: 'textarea[aria-label*="message" i], [contenteditable="true"][role="textbox"]',
-  send: /^Send( message)?$/i,
   messages: '[data-message-id], [data-message-text]',
   messageText: '[data-message-text], [data-message-id] [jsname="dTKtvb"]', sender: '[data-sender-name]',
   googleAccount: 'a[aria-label^="Google Account"], button[aria-label^="Google Account"]',
@@ -172,8 +171,12 @@ export class MeetDriver {
   async sendChat(text) {
     if (!this.chatReady || typeof text !== 'string' || text.length > 4096) throw new Error('CHAT_UNAVAILABLE');
     await this.openChat(); // Meet's audio settings dialog can close the side panel.
-    try { await this.page.locator(selectors.messageInput).first().fill(text); await this.page.getByRole('button', { name: selectors.send }).first().click({ timeout: 5000 }); }
-    catch { throw new Error('CHAT_UNAVAILABLE'); }
+    // Enter instead of the Send button: its label changed to "Send a message" and silently broke the button match.
+    const input = this.page.locator(selectors.messageInput).first();
+    try {
+      await input.fill(text, { timeout: 5000 }); await input.press('Enter');
+      await this.page.waitForFunction(element => !(element.value ?? element.textContent), await input.elementHandle(), { timeout: 3000 });
+    } catch { throw new Error('CHAT_UNAVAILABLE'); }
   }
 }
 
