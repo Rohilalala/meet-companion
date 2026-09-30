@@ -93,6 +93,42 @@ test('chat playback serializes source changes, stops on failure, and never repor
   assert.equal(events.at(-1), 'stop'); assert.equal(events.length, 6);
 });
 
+test('chat queue: play queues while playing, skip passes broken entries, advance, stop clears, no links echoed', async () => {
+  for (const action of ['skip', 'queue', 'np', 'clear']) assert.deepEqual(parseBotCommand('/bot ' + action), { action });
+  assert.deepEqual(parseBotCommand('/bot next'), { action: 'skip' });
+  const events = [], said = [], prefetched = [];
+  const bot = new ChatBot({
+    stop: async () => events.push('stop'),
+    playAudio: async command => { events.push('audio:' + command.search); if (command.search === 'broken') throw new Error('YOUTUBE_BLOCKED'); return 'Title ' + command.search; },
+    playMusic: async command => { events.push('music:' + command.service); },
+    pause: async () => { throw new Error('NOTHING_PLAYING'); },
+    say: async text => said.push(text), prefetch: command => command && prefetched.push(command.search ?? command.service), report: () => {},
+  });
+  await bot.receive({ text: '/bot yt one' });
+  for (const text of ['/bot yt broken', '/bot yt two', '/bot spotify https://open.spotify.com/track/fixture123']) await bot.receive({ text });
+  assert.equal(bot.current.title, 'Title one');
+  assert.deepEqual(said, ['Queued #1: "broken"', 'Queued #2: "two"', 'Queued #3: Spotify link']);
+  assert.equal(prefetched[0], 'broken');
+  await bot.receive({ text: '/bot queue' });
+  assert.equal(said.at(-1), 'Queue: 1. "broken" · 2. "two" · 3. Spotify link');
+  const stops = events.filter(event => event === 'stop').length;
+  await bot.receive({ text: '/bot pause' });
+  assert.equal(events.filter(event => event === 'stop').length, stops, 'a failed control command must not stop playback');
+  await bot.receive({ text: '/bot skip' });
+  assert.equal(bot.current.title, 'Title two'); assert.equal(bot.queue.length, 1);
+  await bot.receive({ text: '/bot np' }); assert.equal(said.at(-1), 'Now playing: Title two');
+  await bot.advance(); assert.equal(bot.current.service, 'spotify');
+  await bot.advance(); assert.equal(bot.current, null); assert.equal(said.at(-1), 'Queue finished.');
+  const count = events.length; await bot.advance(); assert.equal(events.length, count, 'advance is a no-op when nothing plays');
+  for (const text of ['/bot yt a', '/bot yt b', '/bot yt c', '/bot stop']) await bot.receive({ text });
+  assert.deepEqual(bot.queue, []); assert.equal(bot.current, null);
+  for (let i = 0; i < 22; i++) await bot.receive({ text: '/bot yt x' + i });
+  assert.equal(bot.queue.length, 20, 'queue is capped');
+  await bot.receive({ text: '/bot clear' }); assert.deepEqual(bot.queue, []); assert.equal(said.at(-1), 'Queue cleared.');
+  assert.equal(said.some(text => text.includes('https')), false);
+  await bot.close();
+});
+
 test('chat ignores rebuilt message nodes but accepts a new message with the same text', () => {
   let onMutation;
   const received = [];

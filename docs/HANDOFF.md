@@ -107,24 +107,31 @@ The owner confirmed they were actively sending new `/bot` commands during debugg
 
 ## Supported chat commands
 
+Updated 2026-09-30 for the yt-dlp route and the queue (offline-tested only; not yet exercised in a live meeting).
+
 ```text
-/bot <link>
+/bot <link>                  (queues if something is playing)
 /bot "<link>"
 /bot play <link>
 /bot spotify <link>
 /bot applemusic <link>       (alias: apple)
-/bot ytmusic <link>          (alias: youtube-music)
-/bot youtube <link>          (alias: yt)
+/bot youtube <link|search>   (aliases: yt, ytmusic, youtube-music) — yt-dlp audio
+/bot yt <search text>        (ytsearch1, top result)
+/bot ytvideo <link>          (native tab share, unchanged)
+/bot skip                    (alias: next; broken entries are skipped too)
+/bot queue                   (first 10 entries: titles, search text or service name, never links)
+/bot np                      (now playing)
+/bot clear                   (empties the queue, keeps the current track)
 /bot pause
 /bot resume
 /bot play                    (resume current source)
 /bot mute
 /bot unmute
-/bot stop
+/bot stop                    (stops and clears the queue)
 /bot help                    (/bot alone also shows help)
 ```
 
-Service prefixes must match the URL. Ordinary chat is ignored; history present at observer installation is not replayed. Commands are serialized, and a new link replaces the current source. Any participant can currently control playback; sender authorization is not implemented. No queue, next-track or volume command is implemented. Mute preference persists across source changes.
+Service prefixes must match the URL. Ordinary chat is ignored; history present at observer installation is not replayed. Commands are serialized. Playing while something plays adds it to a queue capped at 20 entries. The next YouTube entry is resolved ahead of time for its title and a faster start. yt-dlp tracks advance automatically when `/player` reports ended; Spotify, Apple Music and ytvideo entries advance only on `/bot skip`. A failed control command (pause, resume, mute) now reports its error without stopping playback. Any participant can currently control playback, including stop and clear; sender authorization is not implemented. No volume command. Mute preference persists across source changes.
 
 ## Architecture and important files
 

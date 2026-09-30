@@ -4,7 +4,8 @@ export function parseBotCommand(text) {
   if (typeof text !== 'string' || !/^\/bot(?:\s|$)/i.test(text.trim())) return null;
   let input = text.trim().replace(/^\/bot\s*/i, '');
   if (!input) return { action: 'help' };
-  if (/^(pause|resume|stop|mute|unmute|help)$/i.test(input)) return { action: input.toLowerCase() };
+  if (/^(pause|resume|stop|mute|unmute|help|skip|queue|np|clear)$/i.test(input)) return { action: input.toLowerCase() };
+  if (/^next$/i.test(input)) return { action: 'skip' };
   if (/^play$/i.test(input)) return { action: 'resume' };
   input = input.replace(/^play\s+/i, '');
   const aliases = { spotify: 'spotify', applemusic: 'applemusic', apple: 'applemusic', ytmusic: 'youtube', 'youtube-music': 'youtube', youtube: 'youtube', yt: 'youtube', ytvideo: 'youtube' };
@@ -56,12 +57,19 @@ function parseLink(link, video) {
   throw new Error('BOT_SERVICE_UNSUPPORTED');
 }
 
+const code = error => /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED';
+const where = error => error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [];
+const names = { spotify: 'Spotify link', applemusic: 'Apple Music link', youtube: 'YouTube link' };
+// Chat labels never echo links: a resolved title, the search text, or the service name.
+const label = command => command.title ?? (command.search ? `"${command.search}"` : command.mode === 'presentation' ? 'YouTube video' : names[command.service]);
+
 // Commands are serialized so two chat callbacks cannot overlap audio routes.
+// Queue semantics follow Discord music bots: play queues while something plays, skip advances past broken entries, stop clears.
 export class ChatBot {
-  constructor({ stop, playMusic, playAudio, playVideo, pause, resume, mute, help, report }) {
-    Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, help, report });
+  constructor({ stop, playMusic, playAudio, playVideo, pause, resume, mute, help, say = async () => {}, prefetch = () => {}, report }) {
+    Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, help, say, prefetch, report });
     this.pending = Promise.resolve(); this.closed = false;
-    this.busy = false;
+    this.busy = false; this.queue = []; this.current = null;
   }
   receive(message) {
     if (this.closed) return this.pending;
@@ -69,26 +77,61 @@ export class ChatBot {
     try { command = parseBotCommand(message.text); }
     catch (error) { this.report({ result: 'REJECTED', error: error.message }); return this.pending; }
     if (!command) return this.pending;
+    return this.run(() => this.apply(command));
+  }
+  // The runtime calls this when the current track has ended.
+  advance() { return this.run(() => this.current ? this.next() : undefined); }
+  run(task) {
     this.pending = this.pending.then(async () => {
       if (this.closed) return;
       this.busy = true;
-      try {
-        if (command.action !== 'play') {
-          if (command.action === 'mute' || command.action === 'unmute') await this.mute(command.action === 'mute');
-          else await this[command.action]();
-          this.report({ result: 'APPLIED', action: command.action });
-          return;
-        }
-        await this.stop();
-        if (this.closed) return;
-        await ({ presentation: this.playVideo, audio: this.playAudio }[command.mode] ?? this.playMusic).call(this, command);
-        this.report({ result: 'STARTED', service: command.service, mode: command.mode });
-      } catch (error) {
-        await this.stop().catch(() => {});
-        this.report({ result: 'ERROR', action: command.action, service: command.service, error: /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED', sourceLocations: error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [] });
-      } finally { this.busy = false; }
+      try { await task(); } finally { this.busy = false; }
     });
     return this.pending;
   }
-  async close() { this.closed = true; await this.pending; await this.stop(); }
+  async apply(command) {
+    const { action } = command;
+    try {
+      if (action === 'play') {
+        if (!this.current) return await this.next(command);
+        // ponytail: fixed cap; make it configurable if 20 is ever too small.
+        if (this.queue.length >= 20) throw new Error('QUEUE_FULL');
+        this.queue.push(command);
+        if (this.queue.length === 1) this.prefetch(command);
+        this.report({ result: 'QUEUED', service: command.service, mode: command.mode, position: this.queue.length });
+        return await this.say(`Queued #${this.queue.length}: ${label(command)}`);
+      }
+      if (action === 'skip') return await this.next();
+      if (action === 'stop') { this.queue = []; this.current = null; await this.stop(); }
+      else if (action === 'clear') { this.queue = []; await this.say('Queue cleared.'); }
+      else if (action === 'queue') await this.say(this.queue.length ? 'Queue: ' + this.queue.slice(0, 10).map((entry, i) => `${i + 1}. ${label(entry)}`).join(' · ') + (this.queue.length > 10 ? ` · +${this.queue.length - 10} more` : '') : 'Queue is empty.');
+      else if (action === 'np') await this.say(this.current ? `Now playing: ${label(this.current)}` : 'Nothing is playing.');
+      else if (action === 'mute' || action === 'unmute') await this.mute(action === 'mute');
+      else await this[action]();
+      this.report({ result: 'APPLIED', action });
+    } catch (error) {
+      // A failed control command reports only; it no longer stops healthy playback.
+      this.report({ result: 'ERROR', action, service: command.service, error: code(error), sourceLocations: where(error) });
+    }
+  }
+  // Starts `first`, or the head of the queue; broken entries are reported and skipped.
+  async next(first) {
+    let command = first ?? this.queue.shift();
+    await this.stop(); this.current = null;
+    while (command && !this.closed) {
+      this.prefetch(this.queue[0]);
+      try {
+        const title = await ({ presentation: this.playVideo, audio: this.playAudio }[command.mode] ?? this.playMusic).call(this, command);
+        this.current = { ...command, title: title ?? command.title };
+        this.report({ result: 'STARTED', service: command.service, mode: command.mode });
+        return;
+      } catch (error) {
+        await this.stop().catch(() => {});
+        this.report({ result: 'ERROR', action: 'play', service: command.service, error: code(error), sourceLocations: where(error) });
+        command = this.queue.shift();
+      }
+    }
+    if (!first && !this.closed) await this.say('Queue finished.');
+  }
+  async close() { this.closed = true; await this.pending; this.queue = []; await this.stop(); }
 }
