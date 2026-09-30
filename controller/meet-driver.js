@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 
 // English Chrome/Meet UI. All Meet selectors, including chat, live here.
 export const selectors = {
-  leave: /Leave call/i, join: /^(Join now|Ask to join|Join here too|Ask to join anyway|Join anyway)$/i,
+  leave: /Leave call/i, join: /^(Join now|Ask to join|Switch here|Join here too|Ask to join anyway|Join anyway)$/i,
   cameraOff: /Turn off camera/i, cameraOn: /Turn on camera/i,
   mute: /Turn off microphone/i, unmute: /Turn on microphone/i,
   leaveControl: 'button[aria-label^="Leave call"]',
