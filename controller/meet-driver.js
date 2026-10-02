@@ -19,7 +19,7 @@ export const selectors = {
   settingsMenu: /Settings/i,
   audioTab: 'Audio',
   audioFilters: ['Studio sound', 'Noise cancellation'],
-  closeSettings: /^Close dialog$/i,
+  closeSettings: /^Close dialog(ue)?$/i,
   present: 'button[aria-label*="Present now"], button[aria-label="Share screen"]',
   presenting: 'button[aria-label="You are presenting"]',
   stopPresenting: /Stop presenting/i,
@@ -61,11 +61,12 @@ export class MeetDriver {
   async state() {
     if (new URL(this.page.url()).hostname === 'accounts.google.com') return 'SIGNED_OUT(google)';
     const text = await this.page.locator('body').innerText().catch(() => '');
-    if (/Sign in to join/i.test(text) || await this.page.locator(selectors.guestName).first().isVisible()) return 'SIGNED_OUT(google)';
+    if (/Sign in to join/i.test(text) && !this.guestMode) return 'SIGNED_OUT(google)';
+    if (await this.page.locator(selectors.guestName).first().isVisible()) return this.guestMode ? 'joining' : 'SIGNED_OUT(google)';
     if (denied.test(text)) return 'ADMISSION_DENIED';
     if (removed.test(text)) return 'REMOVED';
     if (ended.test(text)) return 'MEETING_ENDED';
-    if (/Asking to be let in|You'll join when someone lets you in|Wait for the host/i.test(text)) return 'awaiting_admission';
+    if (/Asking to be let in|You'll join when someone lets you in|Wait for the host|Please wait until a meeting host brings you into the call/i.test(text)) return 'awaiting_admission';
     // A hang-up control alone is not evidence of admission. CSS locators also
     // see rendered controls when a Meet modal hides them from accessibility.
     if (await this.page.locator(selectors.leaveControl).first().isVisible() &&
@@ -84,19 +85,28 @@ export class MeetDriver {
       }
     } catch { throw new Error('MEDIA_OFF_UNVERIFIED'); }
   }
-  async join(link, { timeout = 180000, cancelled = () => false } = {}) {
+  async join(link, { timeout = 180000, cancelled = () => false, manual = false, onReady = () => {} } = {}) {
     await this.page.goto(meetingURL(link), { waitUntil: 'domcontentloaded' });
-    if (await this.state() === 'SIGNED_OUT(google)') throw new Error('SIGNED_OUT(google)');
+    const guestName = this.page.locator(selectors.guestName).first();
+    const joinButton = this.page.getByRole('button', { name: selectors.join }).first();
+    await Promise.race([
+      guestName.waitFor({ state: 'visible', timeout: 30000 }),
+      joinButton.waitFor({ state: 'visible', timeout: 30000 }),
+    ]).catch(() => { throw new Error('PREJOIN_UI_UNAVAILABLE'); });
+    if (await guestName.isVisible()) {
+      await guestName.fill('Meet Companion');
+      this.guestMode = true;
+    } else if (await this.state() === 'SIGNED_OUT(google)') throw new Error('SIGNED_OUT(google)');
     const start = Date.now();
-    await this.page.getByRole('button', { name: selectors.join }).first().waitFor({ timeout: 30000 }).catch(() => { throw new Error('PREJOIN_UI_UNAVAILABLE'); });
+    await joinButton.waitFor({ timeout: 30000 }).catch(() => { throw new Error('PREJOIN_UI_UNAVAILABLE'); });
     await this.page.evaluate(async () => {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       stream.getTracks().forEach(track => track.stop());
     }).catch(() => { throw new Error('BLACKHOLE_INPUT_UNAVAILABLE'); });
     await this.disableMedia();
-    const button = this.page.getByRole('button', { name: selectors.join }).first();
-    const asked = /^Ask to join/i.test(await button.innerText());
-    await button.click();
+    const asked = /^Ask to join/i.test(await joinButton.innerText());
+    if (manual) onReady();
+    else await joinButton.click();
     const requestedAt = Date.now();
     while (Date.now() - requestedAt < timeout) {
       // Leave pressed while still waiting to be admitted: stop waiting instead of holding the call open.
@@ -120,6 +130,7 @@ export class MeetDriver {
   async configureMusicAudio() {
     // Filters stay off for the rest of the call; reopening settings each track was slow and closed the chat panel.
     if (this.audioConfigured) return;
+    await this.page.bringToFront();
     await this.reveal();
     await this.page.locator(selectors.moreOptions).click({ timeout: 10000 });
     await this.page.getByRole('menuitem', { name: selectors.settingsMenu }).click();

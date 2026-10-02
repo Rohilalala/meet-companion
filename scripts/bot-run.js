@@ -8,14 +8,21 @@ if (!live) {
   console.log('Run npm run bot -- --live to join the configured meeting and listen for /bot <link>.');
 } else {
   try {
+    const manualJoin = process.argv.includes('--manual-join');
+    if (manualJoin && !process.argv.includes('--windowed')) throw new Error('MANUAL_JOIN_REQUIRES_WINDOW');
     // One shutdown path: a signal only sets the flag; the loop exits, the bot clicks Leave, then Chrome closes.
     // `on`, not `once`: a repeated signal must not fall back to Node's default kill mid-cleanup.
     process.on('SIGINT', () => { interrupted = true; });
     process.on('SIGTERM', () => { interrupted = true; });
-    h = await harness({ presentation: true, signals: false });
+    h = await harness({ presentation: true, signals: false, headless: !process.argv.includes('--windowed') });
     // `--meeting <link>` joins another meeting than the saved one (validated by meetingURL).
     const meeting = process.argv.indexOf('--meeting');
-    stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink, { cancelled: () => interrupted });
+    stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink, {
+      cancelled: () => interrupted,
+      timeout: manualJoin ? 600000 : 180000,
+      manual: manualJoin,
+      onReady: () => emit('BOT', { state: 'PREJOIN_READY', action: 'Click Ask to join in the bot window; the host must admit the guest.' }),
+    });
     bot = new ChatBot({ ...playback(h), leave: async () => { interrupted = true; }, report: observation => emit('BOT', observation) });
     bot.announcePin();
     // Right after joining, Meet popups can cover the chat controls: dismiss and retry.

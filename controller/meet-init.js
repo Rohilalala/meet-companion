@@ -7,7 +7,7 @@ export function meetInit(audioRoute = { input: '^BlackHole 2ch(?: \\(Virtual\\))
   const canvas = document.createElement('canvas');
   canvas.width = 1280; canvas.height = 720;
   const ctx = canvas.getContext('2d');
-  let frame = 0, epoch = null, error = null;
+  let frame = 0, epoch = null, error = null, drawTimer = null;
   const inputs = new Set();
   const peers = new Set(), NativePeer = window.RTCPeerConnection;
   if (NativePeer) window.RTCPeerConnection = new Proxy(NativePeer, { construct(Target, args) {
@@ -29,8 +29,8 @@ export function meetInit(audioRoute = { input: '^BlackHole 2ch(?: \\(Virtual\\))
     }
   }
   draw();
-  setInterval(draw, 1000 / 30);
   const camera = () => {
+    draw();
     const track = canvas.captureStream(30).getVideoTracks()[0];
     Object.defineProperty(track, 'label', { value: 'Meet Companion Cam' });
     return track;
@@ -137,8 +137,8 @@ export function meetInit(audioRoute = { input: '^BlackHole 2ch(?: \\(Virtual\\))
       }
       return observations;
     },
-    camtest(startAt = Date.now() + 1000) { epoch = startAt; return { width: canvas.width, height: canvas.height, requestedFps: 30, epoch }; },
-    stopCamtest() { epoch = null; },
+    camtest(startAt = Date.now() + 1000) { epoch = startAt; drawTimer ??= setInterval(draw, 1000 / 30); return { width: canvas.width, height: canvas.height, requestedFps: 30, epoch }; },
+    stopCamtest() { epoch = null; if (drawTimer !== null) clearInterval(drawTimer); drawTimer = null; draw(); },
     inputSettings() { return [...inputs].filter(track => track.readyState === 'live').map(track => { const settings = track.getSettings(); return { echoCancellation: settings.echoCancellation, noiseSuppression: settings.noiseSuppression, autoGainControl: settings.autoGainControl, sampleRate: settings.sampleRate, channelCount: settings.channelCount }; }); },
     status() { return { canvasWidth: canvas.width, canvasHeight: canvas.height, diagnostic: epoch !== null, framesDrawn: frame, error }; },
   };

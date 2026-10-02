@@ -25,7 +25,7 @@ export async function launchBot({ headless = true, presentation = false, signals
     '--no-first-run', '--no-default-browser-check', ...platform.chromeArgs,
     ...(presentation ? [`--auto-select-tab-capture-source-by-title=${presentationTitle}`] : []),
     '--window-size=1920,1080',
-    ...(headless ? ['--headless=new', '--screen-info={0,0 1920x1080}'] : ['--window-position=-10000,-10000']), 'about:blank',
+    ...(headless ? ['--headless=new', '--screen-info={0,0 1920x1080}'] : [platform.id === 'linux' ? '--window-position=0,0' : '--window-position=-10000,-10000']), 'about:blank',
   ];
   const child = spawn(config.chrome, args, { stdio: 'ignore' });
   let spawnFailed = false;

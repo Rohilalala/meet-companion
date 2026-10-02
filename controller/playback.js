@@ -5,6 +5,7 @@ import * as youtube from './youtube.js';
 import * as ytdlp from './ytdlp.js';
 
 export function playback(h) {
+  const media = h.media ?? ytdlp;
   const adapters = { spotify: spotifyPlay, applemusic: applePlay, youtubemusic: musicPlay };
   let active = null, paused = false, muted = false, level = 1;
   // The BlackHole mic carries everything except the YouTube web-player share (ytweb), which uses tab audio.
@@ -51,7 +52,7 @@ export function playback(h) {
     // Resolve the next YouTube entry ahead of time (title for /bot queue, faster start, early failure).
     prefetch(command) {
       if (!(command?.mode === 'audio' || command?.dlp) || command.resolved) return;
-      command.resolved = ytdlp.resolve(ytdlp.target(command), { kind: command.dlp ? 'video' : 'audio' });
+      command.resolved = media.resolve(ytdlp.target(command), { kind: command.dlp ? 'video' : 'audio' });
       command.resolved.then(resolved => { command.title = resolved.title; }, () => {});
     },
     async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue). Owner PIN needed: /clear <pin>, /leave <pin>. /video <link or search> shares a YouTube video. /bot <command> also works.'); },
@@ -81,7 +82,7 @@ export function playback(h) {
     async playAudio(command) {
       let title;
       await startMusic(command, async () => {
-          const resolved = await (command.resolved ?? ytdlp.resolve(ytdlp.target(command)));
+          const resolved = await (command.resolved ?? media.resolve(ytdlp.target(command)));
           title = resolved.title;
           // Always the local no-store stream: Chrome caches direct googlevideo audio in the bot profile, even with DevTools cache disabled.
           await load(h.server.origin + '/stream/' + h.server.streamOnce(resolved.link, resolved.ext));
@@ -95,7 +96,7 @@ export function playback(h) {
       if (command.dlp) {
         await h.driver.configureMusicAudio();
         // yt-dlp video in the bot's own /player page (no YouTube page), loaded paused so the tab is presented first.
-        const resolved = await (command.resolved ?? ytdlp.resolve(ytdlp.target(command), { kind: 'video' }));
+        const resolved = await (command.resolved ?? media.resolve(ytdlp.target(command), { kind: 'video' }));
         title = resolved.title;
         await h.player.setViewportSize({ width: 1920, height: 1080 });
         const src = h.server.origin + '/stream/' + h.server.streamOnce(resolved.link, resolved.ext, 'video');
