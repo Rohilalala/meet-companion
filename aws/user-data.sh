@@ -4,13 +4,13 @@
 # the retained 16 GiB disk keeps costing about $1.46 a month until the instance is terminated.
 MINUTES="${MEET_COMPANION_MAX_MINUTES:-120}"
 shutdown -h "+${MINUTES}" "meet-companion test window is over"
-# Stop again 30 minutes after every later boot, in case the instance is started and forgotten.
-cat > /etc/systemd/system/meet-companion-autostop.service <<'UNIT'
+# Apply the same deadline after every later boot, in case the instance is restarted and forgotten.
+cat > /etc/systemd/system/meet-companion-autostop.service <<UNIT
 [Unit]
-Description=Stop this test instance 120 minutes after boot
+Description=Stop this test instance ${MINUTES} minutes after boot
 [Service]
 Type=oneshot
-ExecStart=/sbin/shutdown -h +120
+ExecStart=/sbin/shutdown -h +${MINUTES}
 [Install]
 WantedBy=multi-user.target
 UNIT

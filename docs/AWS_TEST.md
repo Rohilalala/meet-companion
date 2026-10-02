@@ -1,6 +1,8 @@
 # Short AWS test of the Linux port
 
-Nothing here has been launched. `aws/launch-test.sh` prints its plan and asks AWS for a free dry run unless it is given `--launch`.
+Nothing here has been launched. `aws/launch-test.sh` verifies the exact launch request with a free AWS dry run once its security group and SSH key pair exist. On a fresh account, use `aws/launch-test.sh --prepare` to create only those free prerequisites and run the dry run. The script reports denials as failures; it launches a billable instance only with `--launch`.
+
+The launch guard has account-free shell tests: `node --test aws/launch-test.test.js`.
 
 ## Cost (Mumbai, `ap-south-1`)
 
@@ -22,8 +24,8 @@ Two settings keep the bill bounded: CPU credits are set to `standard`, so a busy
 
 ## Before the first paid launch — needs you
 
-1. **A scoped AWS identity.** The AWS CLI on the Mac is signed in as the account root user, and `aws/launch-test.sh` refuses to run as root. Create an IAM user or role with only `aws/test-policy.json` attached (Mumbai only, `t4g.medium`/`t4g.large` only, instances tagged `Project=meet-companion-test`, one key pair, one security group) and configure the CLI to use it.
-2. **Run the dry run**: `aws/launch-test.sh`. Then, when ready to pay, `aws/launch-test.sh --launch`.
+1. **A scoped AWS identity.** The AWS CLI on the Mac is signed in as the account root user, and `aws/launch-test.sh` refuses to run as root. Create an IAM user or role with the example `aws/test-policy.json` attached and configure the CLI to use it. The example restricts instance type, region and project tag, but its key-pair and security-group permissions are region-wide; review and tighten it before production use.
+2. **Prepare and dry-run**: `aws/launch-test.sh --prepare` creates the free SSH key pair and security group, then asks AWS to validate the full instance request without launching it. On later runs, `aws/launch-test.sh` checks the existing prerequisites without changing AWS. Review its output before using `aws/launch-test.sh --launch` for the paid test. A second tagged instance is refused.
 3. **Sign in by hand on the instance**: the bot's Google account, and any music service, through `npm run bot:login` over a temporary remote desktop. Sign-in is never automated and no profile is copied from the Mac.
 4. **Watch from a second device** in a test meeting: admission, a generated tone, a song, echo, and a `/video` at 1080p for frame rate and aspect ratio. Only this makes a result receiver-verified.
 5. **Stop or terminate** the instance afterwards (commands are printed at launch).
