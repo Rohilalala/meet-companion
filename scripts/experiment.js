@@ -1,8 +1,10 @@
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { setTimeout as delay } from 'node:timers/promises';
 import { createInterface } from 'node:readline/promises';
 import { launchBot } from './bot-launch.js';
 import { settings } from './settings.js';
+import { platform, requireAudio } from './platform.js';
+export { requireAudio };
 import { startServer } from '../controller/server.js';
 import { meetInit } from '../controller/meet-init.js';
 import { playerInit } from '../controller/player-init.js';
@@ -23,16 +25,6 @@ export function blocked(experiment, needs) { emit(experiment, { result: 'BLOCKED
 export async function run(experiment, action) {
   try { await action(); } catch (error) { emit(experiment, { result: 'ERROR', error: errorCode(error) }); process.exitCode = 1; }
 }
-export function requireAudio(config) {
-  const data = JSON.parse(execFileSync('/usr/sbin/system_profiler', ['SPAudioDataType', '-json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 }));
-  const devices = data.SPAudioDataType.flatMap(group => group._items ?? []);
-  const defaults = devices.filter(device => device.coreaudio_default_audio_output_device === 'spaudio_yes' || device.coreaudio_default_audio_system_device === 'spaudio_yes');
-  if (!defaults.length) throw new Error('DEFAULT_OUTPUT_UNKNOWN');
-  if (defaults.some(device => /blackhole/i.test(device._name))) throw new Error('BLACKHOLE_DEFAULT_OUTPUT_FORBIDDEN');
-  if (defaults.some(device => /multi.output|aggregate/i.test(device._name)) && config.defaultAggregateReviewed !== true) throw new Error('DEFAULT_AGGREGATE_REVIEW_REQUIRED');
-  const route = devices.find(device => /^BlackHole 2ch$/i.test(device._name));
-  if (!route?.coreaudio_device_input || !route?.coreaudio_device_output) throw new Error('BLACKHOLE_2CH_MISSING');
-}
 export async function harness({ audio = true, presentation = false, signals = true } = {}) {
   const config = await settings();
   if (audio) requireAudio(config);
@@ -44,9 +36,9 @@ export async function harness({ audio = true, presentation = false, signals = tr
     for (const origin of [server.origin, 'https://meet.google.com', 'https://open.spotify.com', 'https://music.apple.com', 'https://music.youtube.com', 'https://www.youtube.com', 'https://youtube.com']) {
       await bot.context.grantPermissions(origin === 'https://meet.google.com' ? ['microphone', 'camera'] : ['microphone'], { origin });
     }
-    await bot.meet.addInitScript(meetInit);
+    await bot.meet.addInitScript(meetInit, platform.route);
     if (presentation) await bot.meet.addInitScript(presentationInit);
-    await bot.player.addInitScript(playerInit);
+    await bot.player.addInitScript(playerInit, platform.route);
     await bot.player.goto(server.origin + '/player');
     return { ...bot, config, server, spotify, driver: new MeetDriver(bot.meet), async close() { spotify.close(); await bot.close(); await server.close(); } };
   } catch (error) { spotify.close(); await bot?.close(); await server?.close(); throw error; }

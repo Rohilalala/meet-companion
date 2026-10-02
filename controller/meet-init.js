@@ -1,5 +1,5 @@
 // Serialized by Playwright; keep this function self-contained.
-export function meetInit() {
+export function meetInit(audioRoute = { input: '^BlackHole 2ch(?: \\(Virtual\\))?$', missing: 'BLACKHOLE_2CH_MISSING' }) {
   if (window.meetCompanion) return;
   const devices = navigator.mediaDevices;
   const enumerate = devices.enumerateDevices.bind(devices);
@@ -43,8 +43,8 @@ export function meetInit() {
     if (!constraints.audio && !constraints.video) throw new TypeError('MEDIA_CONSTRAINTS_REQUIRED');
     let stream = new MediaStream();
     if (constraints.audio) {
-      const input = (await enumerate()).find(device => device.kind === 'audioinput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(device.label));
-      if (!input) { error = 'BLACKHOLE_2CH_MISSING'; throw new DOMException(error, 'NotFoundError'); }
+      const input = (await enumerate()).find(device => device.kind === 'audioinput' && new RegExp(audioRoute.input, 'i').test(device.label));
+      if (!input) { error = audioRoute.missing; throw new DOMException(error, 'NotFoundError'); }
       stream = await gum({ audio: { deviceId: { exact: input.deviceId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
       for (const track of stream.getAudioTracks()) {
         const apply = track.applyConstraints.bind(track);

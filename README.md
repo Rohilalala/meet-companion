@@ -4,6 +4,8 @@ The owner-authorized `/bot` chat runtime is now being tested. Start it with `npm
 
 Private Google Meet music bot for macOS Apple Silicon. This repository contains the **Phase 0 feasibility harness**, not the Phase 1 product. The extension, queue/activity engine, PIN permissions and production session controller are deferred. Read [FEASIBILITY.md](docs/FEASIBILITY.md) for actual evidence and remaining gates, and [BRIEF.md](docs/BRIEF.md) for the architecture and owner clarification.
 
+The bot also runs on Ubuntu ARM64 with branded Chrome and a PulseAudio/PipeWire route: see [docs/LINUX.md](docs/LINUX.md) for setup and exactly what has and has not been verified there. A short AWS test plan is in [docs/AWS_TEST.md](docs/AWS_TEST.md); nothing has been launched.
+
 ## Install and check
 
 ```sh

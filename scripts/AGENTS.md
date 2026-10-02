@@ -35,3 +35,7 @@ The live tab reverted to an 800x600 virtual screen despite a temporary 1920x1080
 
 ### 2026-10-02 — Two SIGINT handlers raced; Leave was never clicked
 bot-launch.js registered its own SIGINT/SIGTERM handler (close Chrome, exit 130) while bot-run.js only set a flag polled once a second, so every stop closed Chrome before the Leave click and left a ghost participant. bot-run now passes signals: false and owns shutdown with process.on (a repeated signal must not restore Node's default kill). Verified through the launcher: exit code 0, second Leave refused, no Chrome left. The launcher spawns the bot detached so a force-kill can take the whole process group.
+
+
+### 2026-10-02 — Linux port verified on a hosted Ubuntu ARM64 runner
+Public repositories get free `ubuntu-24.04-arm` GitHub runners. Branded Chrome 154 for ARM64 Linux installs from Google's .deb; PulseAudio starts with `pulseaudio --start` once XDG_RUNTIME_DIR exists. Null-sink and remap-source `device.description` values without spaces become Chrome's device labels exactly (MeetCompanionSink, MeetCompanionMic). Headless Chrome routed a generated tone through the sink to the remapped source (RMS 0.140) and passed the native tab-capture check. A parameter named `route` in player-init.js was shadowed by its inner `function route`; the offline test caught it.
