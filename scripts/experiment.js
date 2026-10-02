@@ -11,6 +11,7 @@ import { playerInit } from '../controller/player-init.js';
 import { MeetDriver } from '../controller/meet-driver.js';
 import { Spotify } from '../controller/spotify.js';
 import { presentationInit } from '../controller/presentation-init.js';
+import { remoteMedia } from '../controller/media-relay.js';
 
 export const live = process.argv.includes('--live');
 export const headless = !process.argv.includes('--windowed');
@@ -29,9 +30,10 @@ export async function harness({ audio = true, presentation = false, signals = tr
   const config = await settings();
   if (audio) requireAudio(config);
   const spotify = new Spotify({ clientId: config.spotifyClientId, port: config.port, deviceId: config.spotifyDeviceId });
+  const media = process.env.MEET_MEDIA_TOKEN ? remoteMedia({ token: process.env.MEET_MEDIA_TOKEN }) : undefined;
   let server, bot;
   try {
-    server = await startServer({ ...config, callback: url => spotify.callback(url) });
+    server = await startServer({ ...config, media, callback: url => spotify.callback(url) });
     bot = await launchBot({ headless, presentation, signals });
     for (const origin of [server.origin, 'https://meet.google.com', 'https://open.spotify.com', 'https://music.apple.com', 'https://music.youtube.com', 'https://www.youtube.com', 'https://youtube.com']) {
       await bot.context.grantPermissions(origin === 'https://meet.google.com' ? ['microphone', 'camera'] : ['microphone'], { origin });
@@ -40,7 +42,7 @@ export async function harness({ audio = true, presentation = false, signals = tr
     if (presentation) await bot.meet.addInitScript(presentationInit);
     await bot.player.addInitScript(playerInit, platform.route);
     await bot.player.goto(server.origin + '/player');
-    return { ...bot, config, server, spotify, driver: new MeetDriver(bot.meet), async close() { spotify.close(); await bot.close(); await server.close(); } };
+    return { ...bot, config, server, spotify, media, driver: new MeetDriver(bot.meet), async close() { spotify.close(); await bot.close(); await server.close(); } };
   } catch (error) { spotify.close(); await bot?.close(); await server?.close(); throw error; }
 }
 export async function authorize(h) {

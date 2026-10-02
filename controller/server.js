@@ -5,7 +5,7 @@ import { join, extname, sep } from 'node:path';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { oneTimeIds, stream } from './ytdlp.js';
 
-export async function startServer({ port = 3210, musicFolder, extensionId, allowDefaultTone = false, callback = async () => ({ status: 400, text: 'No authorization pending.' }) } = {}) {
+export async function startServer({ port = 3210, musicFolder, extensionId, media, allowDefaultTone = false, callback = async () => ({ status: 400, text: 'No authorization pending.' }) } = {}) {
   const token = randomBytes(32).toString('hex');
   const files = new Map();
   const streams = oneTimeIds(), children = new Set();
@@ -37,7 +37,7 @@ export async function startServer({ port = 3210, musicFolder, extensionId, allow
         if (request.headers['sec-fetch-site'] === 'cross-site' || (request.headers.origin && request.headers.origin !== origin)) return send(403, 'ORIGIN_REFUSED');
         const entry = streams.take(url.pathname.slice(8));
         if (!entry) return send(404, 'MEDIA_UNAVAILABLE');
-        const child = stream(entry.target, entry.kind); children.add(child);
+        const child = media ? media.stream(entry.target, entry.kind) : stream(entry.target, entry.kind); children.add(child);
         const end = () => { child.kill('SIGKILL'); children.delete(child); };
         child.on('error', () => { end(); response.destroy(); }); child.on('close', () => children.delete(child));
         response.on('close', end);

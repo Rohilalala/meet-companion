@@ -11,6 +11,7 @@
     "control": "node scripts/control.js",
     "preflight": "node scripts/preflight.js",
     "bot:login": "node scripts/bot-login.js",
+    "media:worker": "node scripts/media-worker.js",
     "check": "node scripts/check.js",
     "bot:launch": "node scripts/bot-launch.js",
     "verify:offline": "node --test scripts/offline.test.js",
