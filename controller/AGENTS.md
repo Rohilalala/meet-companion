@@ -81,3 +81,6 @@ With getDisplayMedia audio {suppressLocalAudioPlayback: true}, the captured tab 
 
 ### 2026-09-30 — Meet UI labels and overlays that broke live commands
 Send button is "Send a message" (send chat with Enter, verify the box cleared); chat button becomes "Chat with everyone - New message" with unread messages (prefix match); the toolbar auto-hides (move the mouse first); "Others may see your video differently" intercepts clicks (click Got it). Each was confirmed by a read-only CDP label dump, then fixed and re-run live.
+
+### 2026-10-02 — Meet Settings can label its close button “Close dialogue”
+The AWS bot reached Music Audio settings, then failed at the old `Close dialog` selector before yt-dlp playback began. The live DOM labelled the control `Close dialogue`. The selector now accepts either spelling; its match is verified against the observed label, while receiver playback after this edit remains untested.
