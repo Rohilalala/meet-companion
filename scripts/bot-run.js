@@ -12,7 +12,7 @@ if (!live) {
     // `on`, not `once`: a repeated signal must not fall back to Node's default kill mid-cleanup.
     process.on('SIGINT', () => { interrupted = true; });
     process.on('SIGTERM', () => { interrupted = true; });
-    h = await harness({ presentation: true, signals: false });
+    h = await harness({ presentation: true, signals: false, headless: !process.argv.includes('--windowed') });
     // `--meeting <link>` joins another meeting than the saved one (validated by meetingURL).
     const meeting = process.argv.indexOf('--meeting');
     stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink, { cancelled: () => interrupted });
