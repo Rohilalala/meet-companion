@@ -30,7 +30,7 @@ export function parseBotCommand(text) {
   }
   if (/^play$/i.test(input)) return { action: 'resume' };
   input = input.replace(/^play\s+/i, '');
-  const aliases = { spotify: 'spotify', applemusic: 'applemusic', apple: 'applemusic', ytmusic: 'youtubemusic', 'youtube-music': 'youtubemusic', youtube: 'youtube', yt: 'youtube', ytvideo: 'youtube', video: 'youtube', ytweb: 'youtube' };
+  const aliases = { spotify: 'spotify', applemusic: 'applemusic', apple: 'applemusic', ytmusic: 'youtube', 'youtube-music': 'youtube', youtube: 'youtube', yt: 'youtube', ytvideo: 'youtube', video: 'youtube', ytweb: 'youtube' };
   const prefix = /^(spotify|applemusic|apple|ytmusic|youtube-music|youtube|ytvideo|video|ytweb|yt)\s+/i.exec(input);
   const name = prefix?.[1].toLowerCase();
   if (prefix) input = input.slice(prefix[0].length);
@@ -69,10 +69,6 @@ function parseLink(link, kind = 'audio') {
     if (id && !/^[\w-]{11}$/.test(id)) throw new Error('BOT_LINK_INVALID');
     if (!id && !(url.pathname === '/playlist' && list)) throw new Error('BOT_LINK_INVALID');
     if (list && !/^[\w-]+$/.test(list)) throw new Error('BOT_LINK_INVALID');
-    if (music && kind === 'audio') {
-      if (!id) throw new Error('BOT_PLAYLIST_UNSUPPORTED');
-      return { service: 'youtubemusic', mode: 'music', link: 'https://music.youtube.com/watch?v=' + id };
-    }
     // yt-dlp audio and video take one video only; ytweb keeps the YouTube web-player tab share.
     if (kind !== 'web') {
       if (!id) throw new Error('BOT_PLAYLIST_UNSUPPORTED');
@@ -90,7 +86,7 @@ function parseLink(link, kind = 'audio') {
 const code = error => /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED';
 const where = error => error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [];
 const hints = { NOTHING_PLAYING: 'Nothing is playing. Try /bot yt <song>.', QUEUE_FULL: 'The queue is full (20).', OWNER_PIN_REQUIRED: 'That needs the owner PIN, e.g. /leave 1234. The PIN is on the control page.' };
-const names = { spotify: 'Spotify link', applemusic: 'Apple Music link', youtubemusic: 'YouTube Music link', youtube: 'YouTube link' };
+const names = { spotify: 'Spotify link', applemusic: 'Apple Music link', youtube: 'YouTube link' };
 // Chat labels never echo links: a resolved title, the search text, or the service name.
 const label = command => command.title ?? (command.search ? `"${command.search}"` : command.mode === 'presentation' ? 'YouTube video' : names[command.service]);
 
