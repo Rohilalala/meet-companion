@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 import { requireRuntime, settings, assertProfileAvailable } from './settings.js';
+import { platform } from './platform.js';
 
 export async function launchBot({ headless = true, presentation = false, signals = true } = {}) {
   requireRuntime();
@@ -21,7 +22,7 @@ export async function launchBot({ headless = true, presentation = false, signals
     '--remote-address=127.0.0.1', '--remote-debugging-address=127.0.0.1',
     '--autoplay-policy=no-user-gesture-required', '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding', '--disable-background-timer-throttling',
-    '--no-first-run', '--no-default-browser-check',
+    '--no-first-run', '--no-default-browser-check', ...platform.chromeArgs,
     ...(presentation ? [`--auto-select-tab-capture-source-by-title=${presentationTitle}`] : []),
     '--window-size=1920,1080',
     ...(headless ? ['--headless=new', '--screen-info={0,0 1920x1080}'] : ['--window-position=-10000,-10000']), 'about:blank',
@@ -50,7 +51,7 @@ export async function launchBot({ headless = true, presentation = false, signals
     for (let i = 0; i < 100; i++) {
       if (spawnFailed || child.exitCode !== null) throw new Error('BROWSER_CRASHED');
       try {
-        const output = execFileSync('/usr/sbin/lsof', ['-nP', '-a', '-p', String(child.pid), `-iTCP:${config.debugPort}`, '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+        const output = execFileSync(platform.lsof, ['-nP', '-a', '-p', String(child.pid), `-iTCP:${config.debugPort}`, '-sTCP:LISTEN', '-Fn'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
         listeners = output.split('\n').filter(line => line.startsWith('n')).map(line => line.slice(1));
       } catch { listeners = []; }
       if (listeners.length) break;

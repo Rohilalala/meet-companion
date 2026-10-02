@@ -1,5 +1,6 @@
 // Only output-device selection: never capture service media into a Web Audio graph.
-export function playerInit() {
+// `audioRoute` (not `route`, which is the per-element routing function below) names the dedicated output device.
+export function playerInit(audioRoute = { output: '^BlackHole 2ch(?: \\(Virtual\\))?$', missing: 'BLACKHOLE_2CH_MISSING' }) {
   if (window.companionRoute) return;
   const nativePlay = HTMLMediaElement.prototype.play;
   const nativeSink = HTMLMediaElement.prototype.setSinkId;
@@ -11,12 +12,12 @@ export function playerInit() {
   let error = null, errorName = null, level = 1;
   async function device() {
     const outputs = await navigator.mediaDevices.enumerateDevices();
-    const match = outputs.find(item => item.kind === 'audiooutput' && /^BlackHole 2ch(?: \(Virtual\))?$/i.test(item.label));
-    if (!match) throw new Error('BLACKHOLE_2CH_MISSING');
+    const match = outputs.find(item => item.kind === 'audiooutput' && new RegExp(audioRoute.output, 'i').test(item.label));
+    if (!match) throw new Error(audioRoute.missing);
     return match.deviceId;
   }
   function fail(reason) {
-    error = reason === 'BLACKHOLE_2CH_MISSING' ? reason : 'AUDIO_ROUTE_LOST';
+    error = reason === audioRoute.missing ? reason : 'AUDIO_ROUTE_LOST';
     media.forEach(element => { element.pause(); routed.delete(element); nativeMuted.set.call(element, true); });
     contexts.forEach(context => context.suspend().catch(() => {}));
     return new Error(error);

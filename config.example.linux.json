@@ -1,0 +1,18 @@
+{
+  "chromePath": "/usr/bin/google-chrome-stable",
+  "userDataDir": ".local/chrome-bot",
+  "port": 3210,
+  "debugPort": 9223,
+  "musicFolder": "",
+  "localFile": "",
+  "meetingLink": "",
+  "externalMeetingLink": "",
+  "spotifyClientId": "",
+  "spotifyDeviceId": "",
+  "spotifyLink": "",
+  "spotifyTrackLink": "",
+  "applemusicLink": "",
+  "youtubemusicLink": "",
+  "chatParticipants": [],
+  "chatClockOffsetsMs": [null, null]
+}
