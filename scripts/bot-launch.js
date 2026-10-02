@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 import { randomBytes } from 'node:crypto';
 import { requireRuntime, settings, assertProfileAvailable } from './settings.js';
 
-export async function launchBot({ headless = true, presentation = false } = {}) {
+export async function launchBot({ headless = true, presentation = false, signals = true } = {}) {
   requireRuntime();
   const config = await settings();
   await assertProfileAvailable(config.profile);
@@ -43,7 +43,8 @@ export async function launchBot({ headless = true, presentation = false } = {}) 
     for (let i = 0; i < 30 && child.exitCode === null && child.signalCode === null; i++) await delay(100);
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
   })();
-  process.once('SIGINT', interrupted); process.once('SIGTERM', interrupted);
+  // bot-run owns its shutdown (it must click Leave first), so it opts out of these handlers.
+  if (signals) { process.once('SIGINT', interrupted); process.once('SIGTERM', interrupted); }
   try {
     let listeners;
     for (let i = 0; i < 100; i++) {

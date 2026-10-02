@@ -16,8 +16,9 @@ import { PassThrough } from 'node:stream';
 
 test('control page API: same-origin only, validated links, one bot, events without extra fields', async () => {
   const spawned = [], signals = [];
-  const control = await startControl({ port: 0, savedLink: 'https://meet.google.com/abc-defg-hij', spawnBot: link => {
-    const bot = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill: signal => { signals.push(signal); bot.emit('exit'); } });
+  const control = await startControl({ port: 0, logFile: null, savedLink: 'https://meet.google.com/abc-defg-hij', spawnBot: link => {
+    // The fake only exits on the second signal, so the 'leaving' window is observable.
+    const bot = Object.assign(new EventEmitter(), { stdout: new PassThrough(), kill: signal => { signals.push(signal); if (signals.length > 1) bot.emit('close', 0, null); } });
     spawned.push({ link, bot }); return bot;
   } });
   const url = path => `http://127.0.0.1:${control.port}${path}`;
@@ -36,9 +37,15 @@ test('control page API: same-origin only, validated links, one bot, events witho
     const status = await (await fetch(url('/status'), { headers: { 'X-Companion': '1' } })).json();
     assert.equal(status.running, true); assert.equal(status.meeting, 'abc-defg-hij');
     assert.deepEqual(status.events, [{ observedAt: 't', state: 'LISTENING' }]);
+    spawned[0].bot.stdout.write(JSON.stringify({ state: 'PIN', pin: '4821' }) + '\n');
+    await new Promise(resolve => setImmediate(resolve));
+    const withPin = await (await fetch(url('/status'), { headers: { 'X-Companion': '1' } })).json();
+    assert.equal(withPin.pin, '4821'); assert.equal(JSON.stringify(withPin.events).includes('4821'), false, 'PIN is not an event');
     assert.equal((await post('/leave', {})).status, 202); assert.deepEqual(signals, ['SIGINT']);
+    assert.equal((await post('/leave', {})).status, 409, 'a second Leave must not signal the bot again'); assert.deepEqual(signals, ['SIGINT']);
+    spawned[0].bot.emit('close', 0, null);
     const after = await (await fetch(url('/status'), { headers: { 'X-Companion': '1' } })).json();
-    assert.equal(after.running, false); assert.equal(after.events.at(-1).state, 'EXITED');
+    assert.equal(after.running, false); assert.equal(after.pin, null); assert.equal(after.events.at(-1).state, 'EXITED');
     assert.equal((await post('/leave', {})).status, 409);
   } finally { await control.close(); }
 });
@@ -119,7 +126,11 @@ test('/bot distinguishes music, YouTube audio and ytvideo presentation, and reje
   assert.deepEqual(parseBotCommand('/play'), { action: 'resume' });
   assert.deepEqual(parseBotCommand('/volume 30'), { action: 'volume', level: 30 });
   for (const text of ['/playlist', '/shrug', '/me waves', 'play fein']) assert.equal(parseBotCommand(text), null, text);
-  for (const [text, action] of [['/bot exit', 'leave'], ['/leave', 'leave'], ['/exit now', 'leave'], ['/stop now', 'stop'], ['/help me', 'help'], ['/skip 2', 'skip'], ['/bot pause pls', 'pause']]) assert.deepEqual(parseBotCommand(text), { action }, text);
+  for (const [text, action] of [['/bot exit', 'leave'], ['/leave', 'leave'], ['/ytweb https://youtu.be/abcdefghijk', 'play']]) assert.equal(parseBotCommand(text).action, action, text);
+  assert.deepEqual(parseBotCommand('/leave 1234'), { action: 'leave', pin: '1234' });
+  assert.deepEqual(parseBotCommand('/bot clear 0042'), { action: 'clear', pin: '0042' });
+  // Extra text after a control word is neither run nor searched.
+  for (const text of ['/bot leave the door open', '/exit now', '/stop now', '/stop 1234', '/help me', '/skip 2', '/bot pause pls', '/bot clear skies']) assert.throws(() => parseBotCommand(text), /BOT_COMMAND_EXTRA_TEXT/, text);
   assert.deepEqual(parseBotCommand('/play stop this train'), { action: 'play', service: 'youtube', mode: 'audio', search: 'stop this train' });
   assert.throws(() => parseBotCommand('/bot https://www.youtube.com/playlist?list=PLabc'), /BOT_PLAYLIST_UNSUPPORTED/);
   assert.throws(() => parseBotCommand('/bot yt ' + 'x'.repeat(201)), /BOT_SEARCH_INVALID/);
@@ -175,7 +186,13 @@ test('chat queue: play queues while playing, skip passes broken entries, advance
   assert.deepEqual(bot.queue, []); assert.equal(bot.current, null);
   for (let i = 0; i < 22; i++) await bot.receive({ text: '/bot yt x' + i });
   assert.equal(bot.queue.length, 20, 'queue is capped');
-  await bot.receive({ text: '/bot clear' }); assert.deepEqual(bot.queue, []); assert.equal(said.at(-1), 'Queue cleared.');
+  await bot.receive({ text: '/bot clear' }); assert.equal(bot.queue.length, 20, 'clear needs the owner PIN'); assert.match(said.at(-1), /owner PIN/);
+  bot.announcePin(); const used = bot.pin;
+  await bot.receive({ text: '/bot clear 0000' === '/bot clear ' + used ? '/bot clear 0001' : '/bot clear 0000' }); assert.equal(bot.queue.length, 20, 'wrong PIN');
+  await bot.receive({ text: '/bot clear ' + used }); assert.deepEqual(bot.queue, []); assert.equal(said.at(-1), 'Queue cleared.');
+  assert.notEqual(bot.pin, used, 'PIN rotates after use');
+  await bot.receive({ text: '/bot yt again' }); await bot.receive({ text: '/bot yt queued' });
+  await bot.receive({ text: '/bot clear ' + used }); assert.equal(bot.queue.length, 2, 'a used PIN is dead');
   assert.equal(said.some(text => text.includes('https')), false);
   await bot.close();
 });
@@ -203,7 +220,14 @@ test('volume, replay after stop, and chat replies for failed or unknown commands
   await bot.receive({ text: '/bot stop' });
   await bot.receive({ text: '/bot unmute' }); assert.match(said.at(-1), /mic turns on when something plays/);
   let left = false; bot.leave = async () => { left = true; };
-  await bot.receive({ text: '/exit' }); assert.equal(left, true); assert.equal(said.at(-1), 'Leaving the call. Bye!');
+  await bot.receive({ text: '/exit' }); assert.equal(left, false, 'leave needs the owner PIN'); assert.match(said.at(-1), /owner PIN/);
+  bot.announcePin();
+  await bot.receive({ text: '/exit ' + bot.pin }); assert.equal(left, true); assert.equal(said.at(-1), 'Leaving the call. Bye!');
+  // A failing task must not poison the command chain.
+  bot.say = async () => { throw new Error('CHAT_UNAVAILABLE'); };
+  await bot.advance(); await bot.receive({ text: '/bot volume 10' });
+  bot.say = async text => said.push(text);
+  await bot.receive({ text: '/bot volume 20' }); assert.equal(said.at(-1), 'Volume: 20%');
   await bot.receive({ text: '/bot https://example.com/song' }); assert.match(said.at(-1), /^Didn't understand that \(BOT_SERVICE_UNSUPPORTED\)/);
   await bot.close();
 });
@@ -333,6 +357,14 @@ test('Meet admission requires more than a leave button and respects waiting/term
   }
 });
 
+test('join stops waiting for admission when Leave is pressed', async () => {
+  const element = { first() { return this; }, waitFor: async () => {}, isVisible: async () => false, evaluate: async () => {}, click: async () => {}, innerText: async () => 'Ask to join' };
+  const page = { url: () => 'https://meet.google.com/abc-defg-hij', goto: async () => {}, evaluate: async () => {}, locator: selector => selector === 'body' ? { innerText: async () => 'Asking to be let in' } : element, getByRole: () => element };
+  let checks = 0;
+  await assert.rejects(() => new MeetDriver(page).join('https://meet.google.com/abc-defg-hij', { cancelled: () => ++checks > 2 }), /JOIN_CANCELLED/);
+  assert.equal(checks, 3, 'waited while not cancelled, then stopped');
+});
+
 test('stopping uses Meet presentation UI and never navigates while a share remains active', async () => {
   let presenting = true, menu = false, tracksStopped = false;
   const driver = new MeetDriver({
@@ -342,10 +374,15 @@ test('stopping uses Meet presentation UI and never navigates while a share remai
   });
   await driver.stopPresenting();
   assert.equal(presenting, false); assert.equal(tracksStopped, true);
-  let navigated = false;
-  const actions = playback({ driver: { disableMedia: async () => {}, stopPresenting: async () => { throw new Error('PRESENTATION_STOP_UNVERIFIED'); } }, player: { goto: async () => { navigated = true; } }, server: { origin: 'http://127.0.0.1:3210' } });
+  let navigated = false, stopped = false;
+  const actions = playback({ driver: { disableMedia: async () => {}, stopPresenting: async () => { throw new Error('PRESENTATION_STOP_UNVERIFIED'); } }, player: { goto: async () => { navigated = true; } }, server: { origin: 'http://127.0.0.1:3210', stopStreams() { stopped = true; } } });
   await assert.rejects(() => actions.stop(), /PRESENTATION_STOP_UNVERIFIED/);
-  assert.equal(navigated, false);
+  assert.equal(navigated, false); assert.equal(stopped, true, 'streams are killed even when stop fails');
+  // A failed mic-off still stops the stream and resets the player, then reports the failure.
+  let reset = false, killed = false;
+  const failing = playback({ driver: { disableMedia: async () => { throw new Error('MEDIA_OFF_UNVERIFIED'); }, stopPresenting: async () => {} }, player: { goto: async () => { reset = true; } }, server: { origin: 'http://127.0.0.1:3210', stopStreams() { killed = true; } } });
+  await assert.rejects(() => failing.stop(), /MEDIA_OFF_UNVERIFIED/);
+  assert.equal(killed, true); assert.equal(reset, true);
 });
 
 test('presentation enforces tab audio, motion, bounded resolution and safe cloning', async () => {

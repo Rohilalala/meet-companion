@@ -84,7 +84,7 @@ export class MeetDriver {
       }
     } catch { throw new Error('MEDIA_OFF_UNVERIFIED'); }
   }
-  async join(link, { timeout = 180000 } = {}) {
+  async join(link, { timeout = 180000, cancelled = () => false } = {}) {
     await this.page.goto(meetingURL(link), { waitUntil: 'domcontentloaded' });
     if (await this.state() === 'SIGNED_OUT(google)') throw new Error('SIGNED_OUT(google)');
     const start = Date.now();
@@ -99,6 +99,8 @@ export class MeetDriver {
     await button.click();
     const requestedAt = Date.now();
     while (Date.now() - requestedAt < timeout) {
+      // Leave pressed while still waiting to be admitted: stop waiting instead of holding the call open.
+      if (cancelled()) throw new Error('JOIN_CANCELLED');
       const state = await this.state();
       if (state === 'in_call') {
         await this.disableMedia();
@@ -177,7 +179,8 @@ export class MeetDriver {
       }
       await this.page.locator(selectors.messageInput).first().waitFor({ timeout: 5000 });
       if (!this.chatReady) {
-        await this.page.exposeBinding('companionChatMessage', (_source, message) => onMessage(message));
+        // Register the binding once: a retry after a failed observer install would otherwise throw "already registered".
+        if (!this.chatBound) { await this.page.exposeBinding('companionChatMessage', (_source, message) => onMessage(message)); this.chatBound = true; }
         await this.page.evaluate(observeMeetChat, selectors);
         this.chatReady = true;
       }

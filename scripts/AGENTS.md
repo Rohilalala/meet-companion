@@ -31,3 +31,7 @@ The route watchdog queried the player during navigation and aborted the runtime 
 
 ### 2026-09-30 — Configure the headless screen as well as fullscreen page size
 The live tab reverted to an 800x600 virtual screen despite a temporary 1920x1080 page resize. Launch Chrome with window-size=1920,1080 and screen-info={0,0 1920x1080}; set the YouTube viewport in the owning runtime before fullscreen. Latest live metadata reported a 1920x1080 screen and player and a 3840x2160 browser display track, all 16:9. Receiver aspect-ratio recheck remains pending; the earlier receiver error is not proven fixed.
+
+
+### 2026-10-02 — Two SIGINT handlers raced; Leave was never clicked
+bot-launch.js registered its own SIGINT/SIGTERM handler (close Chrome, exit 130) while bot-run.js only set a flag polled once a second, so every stop closed Chrome before the Leave click and left a ghost participant. bot-run now passes signals: false and owns shutdown with process.on (a repeated signal must not restore Node's default kill). Verified through the launcher: exit code 0, second Leave refused, no Chrome left. The launcher spawns the bot detached so a force-kill can take the whole process group.

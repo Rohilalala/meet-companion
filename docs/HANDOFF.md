@@ -10,6 +10,18 @@ The owner confirmed that the same YouTube link plays normally beyond the first m
 
 **The current runtime does not reliably include the latest saved YouTube changes.** It predates the final `object-fit: contain` and already-fullscreen guard edits. Those edits pass static checks, but have not been accepted in a live receiver test.
 
+## Update 2026-10-02 — control page, shutdown, owner PIN
+
+- `npm run control` serves a local control page at `http://127.0.0.1:3211` (join a pasted or saved Meet link, leave, status, owner PIN). The bot's sanitized events are also appended to ignored `.local/bot-events.log`.
+- Shutdown bug found and fixed. `bot-launch.js` and `bot-run.js` both handled SIGINT; the launch handler closed Chrome and exited 130 before `bot-run` could click Leave, leaving a ghost participant and a different pre-join screen on the next join. `bot-run` now owns shutdown. Verified live through the launcher: Leave gave exit code 0, a second Leave was refused, Chrome was gone and the ports were free.
+- Chat changes:
+  - `/leave` (alias `/exit`) and `/clear` need a one-time owner PIN, e.g. `/leave 4821`. The PIN is shown on the control page and rotates after use.
+  - A control word followed by other text (`/stop now`, `/bot leave the door open`) is rejected with a hint. It is neither run nor searched.
+  - `/video <link|search>` plays yt-dlp video; `/bot ytweb <link>` is the old web-player share.
+- Robustness: a failing task can no longer reject the command chain; `stop()` kills the stream and resets the player even when mic-off fails; auto-advance ignores a track that a command already replaced; joining can be cancelled by Leave.
+- Not verified live: the PIN flow in a real chat, and the join-cancel path. Still open: Spotify/Apple end-of-track detection, the unexplained `BROWSER_CRASHED` at 2026-09-30 17:39 UTC, YouTube rate-limit handling (one lookup per track was declined), and a join that took over two minutes on 2026-10-02 with no recorded reason.
+- Offline tests: 22/22. CI workflow added at `.github/workflows/ci.yml` (not yet run; the repo has no remote).
+
 ## Update 2026-09-30 09:40 UTC (live session, meeting supplied by the owner)
 
 Observed in a live meeting with the owner on a second device; numbers are from the bot's own logs and `meetCompanion.audioStats()`.

@@ -33,14 +33,14 @@ export function requireAudio(config) {
   const route = devices.find(device => /^BlackHole 2ch$/i.test(device._name));
   if (!route?.coreaudio_device_input || !route?.coreaudio_device_output) throw new Error('BLACKHOLE_2CH_MISSING');
 }
-export async function harness({ audio = true, presentation = false } = {}) {
+export async function harness({ audio = true, presentation = false, signals = true } = {}) {
   const config = await settings();
   if (audio) requireAudio(config);
   const spotify = new Spotify({ clientId: config.spotifyClientId, port: config.port, deviceId: config.spotifyDeviceId });
   let server, bot;
   try {
     server = await startServer({ ...config, callback: url => spotify.callback(url) });
-    bot = await launchBot({ headless, presentation });
+    bot = await launchBot({ headless, presentation, signals });
     for (const origin of [server.origin, 'https://meet.google.com', 'https://open.spotify.com', 'https://music.apple.com', 'https://music.youtube.com', 'https://www.youtube.com', 'https://youtube.com']) {
       await bot.context.grantPermissions(origin === 'https://meet.google.com' ? ['microphone', 'camera'] : ['microphone'], { origin });
     }

@@ -11,12 +11,16 @@ export function playback(h) {
   // yt-dlp video mutes its tab audio: Meet's presentation audio sounded much worse than the mic.
   const micCarries = command => command.mode !== 'presentation' || command.dlp;
   async function stop() {
-    // Close the microphone before changing or clearing the player source.
-    await h.driver.disableMedia();
-    await h.driver.stopPresenting();
+    // Close the microphone before changing or clearing the player source. A failed mic-off must not leave the
+    // stream running: still kill yt-dlp and reset the player, then report the failure.
+    let failure;
+    await h.driver.disableMedia().catch(error => { failure = error; });
     h.server.stopStreams();
-    await h.player.goto(h.server.origin + '/player', { waitUntil: 'domcontentloaded' });
-    active = null; paused = false;
+    try {
+      await h.driver.stopPresenting(); // If this fails, do not navigate: the share would show the bare player page.
+      await h.player.goto(h.server.origin + '/player', { waitUntil: 'domcontentloaded' });
+    } finally { active = null; paused = false; }
+    if (failure) throw failure;
   }
   async function playing(command) {
     const detachedOnly = command.service === 'spotify';
@@ -50,7 +54,7 @@ export function playback(h) {
       command.resolved = ytdlp.resolve(ytdlp.target(command), { kind: command.dlp ? 'video' : 'audio' });
       command.resolved.then(resolved => { command.title = resolved.title; }, () => {});
     },
-    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue), /leave. /video <link or search> shares a YouTube video. /bot <command> also works.'); },
+    async help() { await h.driver.sendChat('Meet Companion: /play <song, search or link> (queues while something plays), /pause, /resume, /skip, /queue, /np, /clear, /volume <0-100>, /mute, /unmute, /stop (clears the queue). Owner PIN needed: /clear <pin>, /leave <pin>. /video <link or search> shares a YouTube video. /bot <command> also works.'); },
     async pause() {
       if (!active) throw new Error('NOTHING_PLAYING');
       if (paused) return;

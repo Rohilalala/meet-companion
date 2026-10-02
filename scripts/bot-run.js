@@ -8,13 +8,16 @@ if (!live) {
   console.log('Run npm run bot -- --live to join the configured meeting and listen for /bot <link>.');
 } else {
   try {
-    h = await harness({ presentation: true });
-    process.once('SIGINT', () => { interrupted = true; });
-    process.once('SIGTERM', () => { interrupted = true; });
+    // One shutdown path: a signal only sets the flag; the loop exits, the bot clicks Leave, then Chrome closes.
+    // `on`, not `once`: a repeated signal must not fall back to Node's default kill mid-cleanup.
+    process.on('SIGINT', () => { interrupted = true; });
+    process.on('SIGTERM', () => { interrupted = true; });
+    h = await harness({ presentation: true, signals: false });
     // `--meeting <link>` joins another meeting than the saved one (validated by meetingURL).
     const meeting = process.argv.indexOf('--meeting');
-    stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink);
+    stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink, { cancelled: () => interrupted });
     bot = new ChatBot({ ...playback(h), leave: async () => { interrupted = true; }, report: observation => emit('BOT', observation) });
+    bot.announcePin();
     // Right after joining, Meet popups can cover the chat controls: dismiss and retry.
     stage = 'chat';
     for (let attempt = 1; ; attempt++) {
@@ -34,7 +37,7 @@ if (!live) {
           const route = await h.player.evaluate(() => window.companionRoute?.status());
           if (route?.error) throw new Error('AUDIO_ROUTE_LOST');
           // yt-dlp audio and video play in /player; advance the queue when the track ends.
-          if ((bot.current?.mode === 'audio' || bot.current?.dlp) && await h.player.evaluate(() => window.companionPlayer?.status().ended ?? false)) await bot.advance();
+          if ((bot.current?.mode === 'audio' || bot.current?.dlp) && await h.player.evaluate(() => window.companionPlayer?.status().ended ?? false)) await bot.advance(bot.current);
         } catch (error) {
           if (!/Execution context was destroyed|Cannot find context with specified id/i.test(error.message)) throw error;
         }

@@ -1,16 +1,26 @@
+import { randomInt } from 'node:crypto';
 import { playbackBody } from './spotify.js';
+
+// Removing the bot and clearing the queue need the owner PIN (shown on the control page / in the bot's output).
+const ownerOnly = new Set(['leave', 'clear']);
 
 export function parseBotCommand(text) {
   if (typeof text !== 'string') return null;
   let input = text.trim();
   // Discord-style bare commands (/play, /pause, /skip ...) work like /bot play, /bot pause, /bot skip.
   if (/^\/bot(?:\s|$)/i.test(input)) input = input.replace(/^\/bot\s*/i, '');
-  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|leave|exit|volume|vol|mute|unmute|help|yt|youtube|ytmusic|video|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
+  else if (/^\/(?:play|pause|resume|stop|skip|next|queue|np|clear|leave|exit|volume|vol|mute|unmute|help|yt|youtube|youtube-music|ytmusic|video|ytvideo|ytweb|spotify|apple|applemusic)(?:\s|$)/i.test(input)) input = input.slice(1);
   else return null;
   if (!input) return { action: 'help' };
-  // Control words win even with extra text ("/stop now", "/bot exit"), so they never turn into YouTube searches.
-  const control = /^(pause|resume|stop|mute|unmute|help|skip|next|queue|np|clear|leave|exit)(?:\s|$)/i.exec(input);
-  if (control) { const word = control[1].toLowerCase(); return { action: { next: 'skip', exit: 'leave' }[word] ?? word }; }
+  // A control word must stand alone (leave/exit/clear may carry the owner PIN). With extra text it is rejected:
+  // neither run ("/bot leave the door open" must not eject the bot) nor searched ("/bot exit" once played a film).
+  const control = /^(pause|resume|stop|mute|unmute|help|skip|next|queue|np|clear|leave|exit)(?:\s+(.*))?$/i.exec(input);
+  if (control) {
+    const word = control[1].toLowerCase(), action = { next: 'skip', exit: 'leave' }[word] ?? word, extra = control[2];
+    if (extra === undefined) return { action };
+    if (ownerOnly.has(action) && /^\d{4}$/.test(extra)) return { action, pin: extra };
+    throw new Error('BOT_COMMAND_EXTRA_TEXT');
+  }
   const volume = /^vol(?:ume)?(?:\s+(\d{1,3})%?)?$/i.exec(input);
   if (volume) {
     if (volume[1] === undefined) return { action: 'volume' };
@@ -75,7 +85,7 @@ function parseLink(link, kind = 'audio') {
 
 const code = error => /^[A-Z][A-Z0-9_]+$/.test(error.message) ? error.message : 'PLAYBACK_FAILED';
 const where = error => error.stack?.match(/\/(?:controller|scripts)\/[\w.-]+\.js:\d+:\d+/g) ?? [];
-const hints = { NOTHING_PLAYING: 'Nothing is playing. Try /bot yt <song>.', QUEUE_FULL: 'The queue is full (20).' };
+const hints = { NOTHING_PLAYING: 'Nothing is playing. Try /bot yt <song>.', QUEUE_FULL: 'The queue is full (20).', OWNER_PIN_REQUIRED: 'That needs the owner PIN, e.g. /leave 1234. The PIN is on the control page.' };
 const names = { spotify: 'Spotify link', applemusic: 'Apple Music link', youtube: 'YouTube link' };
 // Chat labels never echo links: a resolved title, the search text, or the service name.
 const label = command => command.title ?? (command.search ? `"${command.search}"` : command.mode === 'presentation' ? 'YouTube video' : names[command.service]);
@@ -87,7 +97,10 @@ export class ChatBot {
     Object.assign(this, { stop, playMusic, playAudio, playVideo, pause, resume, mute, volume, help, say, prefetch, leave, report });
     this.pending = Promise.resolve(); this.closed = false;
     this.busy = false; this.queue = []; this.current = null; this.last = null; this.level = 100;
+    this.pin = null;
   }
+  // One-time owner PIN: a new one after every use, so a PIN seen in chat is already dead.
+  announcePin() { this.pin = String(randomInt(1000, 10000)); this.report({ state: 'PIN', pin: this.pin }); }
   receive(message) {
     if (this.closed) return this.pending;
     let command;
@@ -100,18 +113,26 @@ export class ChatBot {
     return this.run(() => this.apply(command));
   }
   // The runtime calls this when the current track has ended.
-  advance() { return this.run(() => this.current ? this.next() : undefined); }
+  // `expected` is the track that ended: if a command already replaced it, do nothing.
+  advance(expected = this.current) { return this.run(() => this.current && this.current === expected ? this.next() : undefined); }
   run(task) {
     this.pending = this.pending.then(async () => {
       if (this.closed) return;
       this.busy = true;
-      try { await task(); } finally { this.busy = false; }
+      // Nothing may reject this chain: one failure (a chat reply, a stop step) would silently drop every later command.
+      try { await task(); }
+      catch (error) { this.report({ result: 'ERROR', action: 'internal', error: code(error), sourceLocations: where(error) }); }
+      finally { this.busy = false; }
     });
     return this.pending;
   }
   async apply(command) {
     const { action } = command;
     try {
+      if (ownerOnly.has(action)) {
+        if (!this.pin || command.pin !== this.pin) throw new Error('OWNER_PIN_REQUIRED');
+        this.announcePin();
+      }
       if (action === 'play') {
         if (!this.current) return await this.next(command);
         // ponytail: fixed cap; make it configurable if 20 is ever too small.
@@ -122,7 +143,6 @@ export class ChatBot {
         return await this.say(`Queued #${this.queue.length}: ${label(command)}`);
       }
       if (action === 'skip') return await this.next();
-      // ponytail: any participant can make the bot leave; owner-only needs the PIN check.
       if (action === 'leave') { await this.say('Leaving the call. Bye!').catch(() => {}); await this.leave(); this.report({ result: 'APPLIED', action }); return; }
       // After stop, a bare play/resume restarts the last track from the beginning.
       if (action === 'resume' && !this.current && this.last) return await this.next(this.last);
@@ -149,7 +169,9 @@ export class ChatBot {
   // Starts `first`, or the head of the queue; broken entries are reported and skipped.
   async next(first) {
     let command = first ?? this.queue.shift();
-    await this.stop(); this.current = null;
+    // If stopping fails, keep the entry in the queue rather than losing it.
+    try { await this.stop(); } catch (error) { if (!first && command) this.queue.unshift(command); throw error; }
+    this.current = null;
     while (command && !this.closed) {
       this.prefetch(this.queue[0]);
       try {
@@ -164,7 +186,7 @@ export class ChatBot {
         command = this.queue.shift();
       }
     }
-    if (!first && !this.closed) await this.say('Queue finished.');
+    if (!first && !this.closed) await this.say('Queue finished.').catch(() => {});
   }
   async close() { this.closed = true; await this.pending; this.queue = []; await this.stop(); }
 }
