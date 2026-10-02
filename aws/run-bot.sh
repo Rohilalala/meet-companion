@@ -8,4 +8,4 @@ export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$HOME/.local/meet-runtime}"
 cd "$APP"
 bash aws/start-desktop.sh
 npm run preflight
-exec npm run bot -- --live "$@"
+exec node scripts/bot-run.js --live "$@"
