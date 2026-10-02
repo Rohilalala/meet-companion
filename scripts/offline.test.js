@@ -110,9 +110,10 @@ test('/bot distinguishes music, YouTube audio and ytvideo presentation, and reje
   assert.equal(parseBotCommand('/bot play spotify https://open.spotify.com/track/fixture123').service, 'spotify');
   assert.deepEqual(parseBotCommand('/bot ytmusic https://music.youtube.com/watch?v=abcdefghijk'), { action: 'play', service: 'youtubemusic', mode: 'music', link: 'https://music.youtube.com/watch?v=abcdefghijk' });
   assert.equal(parseBotCommand('/bot youtube “https://youtu.be/abcdefghijk”').mode, 'audio');
-  for (const alias of ['youtube', 'yt', 'ytmusic', 'youtube-music']) {
+  for (const alias of ['youtube', 'yt']) {
     assert.deepEqual(parseBotCommand(`/bot ${alias} https://www.youtube.com/watch?v=abcdefghijk&list=RDabc`), { action: 'play', service: 'youtube', mode: 'audio', link: 'https://www.youtube.com/watch?v=abcdefghijk' });
   }
+  for (const alias of ['ytmusic', 'youtube-music']) assert.throws(() => parseBotCommand(`/bot ${alias} https://www.youtube.com/watch?v=abcdefghijk`), /BOT_SERVICE_LINK_MISMATCH/);
   assert.deepEqual(parseBotCommand('/bot ytvideo https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', dlp: true, link: 'https://www.youtube.com/watch?v=abcdefghijk' });
   assert.deepEqual(parseBotCommand('/video https://youtu.be/abcdefghijk'), { action: 'play', service: 'youtube', mode: 'presentation', dlp: true, link: 'https://www.youtube.com/watch?v=abcdefghijk' });
   assert.deepEqual(parseBotCommand('/video bairi piya'), { action: 'play', service: 'youtube', mode: 'presentation', dlp: true, search: 'bairi piya' });
