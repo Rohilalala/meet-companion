@@ -42,11 +42,14 @@ export async function prepare(page, link, title) {
       }`;
     document.head.append(style);
   }, title);
-  if (!(await page.evaluate(() => document.fullscreenElement?.contains(document.querySelector('video.html5-main-video'))))) {
-    // YouTube may navigate as an ad finishes after the click. The geometry check
-    // below decides whether fullscreen actually happened.
+  const fullscreen = () => page.evaluate(() => document.fullscreenElement?.contains(document.querySelector('video.html5-main-video')));
+  for (let attempt = 0; attempt < 2 && !await fullscreen(); attempt++) {
+    // An ad transition can replace the button during the click. Recheck the
+    // actual fullscreen state before trying again so a successful click is not undone.
     await page.locator(selectors.fullscreen).click({ timeout: 5000, noWaitAfter: true }).catch(() => {});
+    await page.waitForTimeout(500);
   }
+  if (!await fullscreen()) await page.keyboard.press('f');
   await page.waitForFunction(() => {
     const video = document.querySelector('video.html5-main-video');
     const node = document.querySelector('#movie_player');
