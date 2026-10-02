@@ -36,14 +36,16 @@ export async function prepare(page, link, title) {
         z-index: 2147483647 !important;
       }
       :fullscreen video.html5-main-video {
-        position: absolute !important; inset: 0 !important;
-        width: 100% !important; height: 100% !important;
+        position: fixed !important; inset: 0 !important;
+        width: 100vw !important; height: 100vh !important;
         object-fit: contain !important; object-position: center !important;
       }`;
     document.head.append(style);
   }, title);
   if (!(await page.evaluate(() => document.fullscreenElement?.contains(document.querySelector('video.html5-main-video'))))) {
-    await page.locator(selectors.fullscreen).click({ timeout: 5000 });
+    // YouTube may navigate as an ad finishes after the click. The geometry check
+    // below decides whether fullscreen actually happened.
+    await page.locator(selectors.fullscreen).click({ timeout: 5000, noWaitAfter: true }).catch(() => {});
   }
   await page.waitForFunction(() => {
     const video = document.querySelector('video.html5-main-video');
