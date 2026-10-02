@@ -19,7 +19,7 @@ export const selectors = {
   settingsMenu: /Settings/i,
   audioTab: 'Audio',
   audioFilters: ['Studio sound', 'Noise cancellation'],
-  closeSettings: /^Close dialog$/i,
+  closeSettings: /^Close dialog(ue)?$/i,
   present: 'button[aria-label*="Present now"], button[aria-label="Share screen"]',
   presenting: 'button[aria-label="You are presenting"]',
   stopPresenting: /Stop presenting/i,
