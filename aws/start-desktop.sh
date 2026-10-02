@@ -8,6 +8,15 @@ APP=$(cd "$(dirname "$0")/.." && pwd -P)
 export DISPLAY=:99
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$HOME/.local/meet-runtime}"
 install -d -m 0700 "$XDG_RUNTIME_DIR" "$APP/.local"
+PASSWORD_FILE="$APP/.local/vnc-password"
+AUTH_FILE="$APP/.local/vnc-auth"
+if [ ! -s "$PASSWORD_FILE" ]; then
+  (umask 077; python3 -c 'import secrets; print(secrets.token_hex(4))' > "$PASSWORD_FILE")
+fi
+if [ ! -s "$AUTH_FILE" ]; then
+  x11vnc -storepasswd "$(cat "$PASSWORD_FILE")" "$AUTH_FILE" >/dev/null 2>&1
+  chmod 600 "$AUTH_FILE"
+fi
 
 start_once() {
   local name=$1; shift
@@ -20,7 +29,7 @@ start_once() {
 }
 
 start_once xvfb Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp -ac
-start_once vnc x11vnc -display :99 -localhost -rfbport 5901 -forever -shared -nopw
+start_once vnc x11vnc -display :99 -localhost -rfbport 5901 -forever -shared -rfbauth "$AUTH_FILE"
 
 # Enforce the loopback-only boundary even if a future x11vnc version changes its flags.
 LISTENERS=$(ss -ltn '( sport = :5901 )' | awk 'NR > 1 { print $4 }')

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Run on the owner's Mac. Only SSH is public; VNC stays on the instance loopback interface.
 set -euo pipefail
+case "${1:-}" in ''|--copy-password) ;; *) echo 'Usage: aws/connect.sh [--copy-password]' >&2; exit 2;; esac
 REGION=ap-south-1
 KEY="$HOME/.ssh/meet-companion-test.pem"
 [ -f "$KEY" ] || { echo 'SSH key missing; run aws/launch-test.sh --prepare first' >&2; exit 2; }
@@ -8,6 +9,11 @@ COUNT=$(aws ec2 describe-instances --region "$REGION" --filters Name=tag:Project
 [ "$COUNT" -eq 1 ] || { echo 'Expected exactly one running test instance' >&2; exit 2; }
 IP=$(aws ec2 describe-instances --region "$REGION" --filters Name=tag:Project,Values=meet-companion-test Name=instance-state-name,Values=running --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
 [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || { echo 'Test instance has no public IPv4' >&2; exit 2; }
+if [ "${1:-}" = --copy-password ]; then
+  ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new "ubuntu@$IP" 'cat ~/meet-companion/.local/vnc-password' | pbcopy
+  echo 'VNC password copied to the Mac clipboard. Paste it into Screen Sharing.'
+  exit 0
+fi
 echo 'SSH and localhost VNC tunnel ready. In the remote shell, run: ~/meet-companion/aws/start-desktop.sh --login'
 echo 'On this Mac, open: vnc://127.0.0.1:5901'
 exec ssh -i "$KEY" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes \
