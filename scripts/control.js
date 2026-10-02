@@ -7,10 +7,10 @@ import { meetingURL } from '../controller/meet-driver.js';
 
 // Always-on local launcher: a control page that starts the bot for a Meet link and stops it.
 // Loopback only; the API also needs a custom header, which cross-site pages cannot send without a CORS preflight we never grant.
-const kept = ['observedAt', 'state', 'result', 'action', 'service', 'mode', 'position', 'error', 'stage', 'errorType', 'sourceLocations', 'chromeExit'];
+const kept = ['observedAt', 'state', 'result', 'action', 'service', 'mode', 'position', 'error', 'stage', 'errorType', 'sourceLocations', 'chromeExit', 'exit', 'stderr'];
 const botRun = fileURLToPath(new URL('./bot-run.js', import.meta.url));
 
-export function startControl({ port = 3211, savedLink, spawnBot = link => spawn(process.execPath, [botRun, '--live', '--meeting', link], { stdio: ['ignore', 'pipe', 'ignore'] }) } = {}) {
+export function startControl({ port = 3211, savedLink, spawnBot = link => spawn(process.execPath, [botRun, '--live', '--meeting', link], { stdio: ['ignore', 'pipe', 'pipe'] }) } = {}) {
   let child = null, meeting = null;
   const events = [];
   const record = event => { events.push(Object.fromEntries(kept.filter(key => event[key] !== undefined).map(key => [key, event[key]]))); if (events.length > 20) events.shift(); };
@@ -42,7 +42,13 @@ export function startControl({ port = 3211, savedLink, spawnBot = link => spawn(
         events.length = 0; meeting = new URL(link).pathname.slice(1);
         const bot = child = spawnBot(link);
         createInterface({ input: bot.stdout }).on('line', line => { try { record(JSON.parse(line)); } catch { /* not an event */ } });
-        bot.on('exit', () => { if (child === bot) child = null; record({ observedAt: new Date().toISOString(), state: 'EXITED' }); });
+        // Keep how the process ended and the tail of its stderr (links removed) so an unexpected exit is explainable.
+        let stderr = '';
+        bot.stderr?.on('data', chunk => { stderr = (stderr + chunk).slice(-600); });
+        bot.on('exit', (code, signal) => {
+          if (child === bot) child = null;
+          record({ observedAt: new Date().toISOString(), state: 'EXITED', exit: { code, signal }, stderr: stderr.replace(/https?:\/\/\S+/g, '[link]').trim() || undefined });
+        });
         return send(202, { ok: true, meeting });
       }
       if (request.url === '/leave') {
@@ -90,7 +96,7 @@ button.primary{background:var(--accent);border-color:var(--accent);color:#fff}bu
 <script nonce="${nonce}">
 const $ = id => document.getElementById(id);
 const api = (path, body) => fetch(path, { method: body ? 'POST' : 'GET', headers: { 'X-Companion': '1', 'Content-Type': 'application/json' }, body: body && JSON.stringify(body) }).then(r => r.json());
-const describe = e => [e.state, e.result, e.action, e.service, e.mode, e.error, e.stage && 'at ' + e.stage, e.sourceLocations?.[0], e.chromeExit && 'chrome ' + (e.chromeExit.signal ?? 'exit ' + e.chromeExit.code)].filter(Boolean).join(' · ');
+const describe = e => [e.state, e.result, e.action, e.service, e.mode, e.error, e.stage && 'at ' + e.stage, e.sourceLocations?.[0], e.chromeExit && 'chrome ' + (e.chromeExit.signal ?? 'exit ' + e.chromeExit.code), e.exit && 'process ' + (e.exit.signal ?? 'exit ' + e.exit.code), e.stderr].filter(Boolean).join(' · ');
 async function refresh() {
   try {
     const s = await api('/status');

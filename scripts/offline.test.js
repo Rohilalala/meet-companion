@@ -37,6 +37,8 @@ test('control page API: same-origin only, validated links, one bot, events witho
     assert.equal(status.running, true); assert.equal(status.meeting, 'abc-defg-hij');
     assert.deepEqual(status.events, [{ observedAt: 't', state: 'LISTENING' }]);
     assert.equal((await post('/leave', {})).status, 202); assert.deepEqual(signals, ['SIGINT']);
+    const after = await (await fetch(url('/status'), { headers: { 'X-Companion': '1' } })).json();
+    assert.equal(after.running, false); assert.equal(after.events.at(-1).state, 'EXITED');
     assert.equal((await post('/leave', {})).status, 409);
   } finally { await control.close(); }
 });
