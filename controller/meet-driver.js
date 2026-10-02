@@ -130,6 +130,7 @@ export class MeetDriver {
   async configureMusicAudio() {
     // Filters stay off for the rest of the call; reopening settings each track was slow and closed the chat panel.
     if (this.audioConfigured) return;
+    await this.page.bringToFront();
     await this.reveal();
     await this.page.locator(selectors.moreOptions).click({ timeout: 10000 });
     await this.page.getByRole('menuitem', { name: selectors.settingsMenu }).click();
