@@ -85,7 +85,7 @@ export class MeetDriver {
       }
     } catch { throw new Error('MEDIA_OFF_UNVERIFIED'); }
   }
-  async join(link, { timeout = 180000, cancelled = () => false } = {}) {
+  async join(link, { timeout = 180000, cancelled = () => false, manual = false, onReady = () => {} } = {}) {
     await this.page.goto(meetingURL(link), { waitUntil: 'domcontentloaded' });
     const guestName = this.page.locator(selectors.guestName).first();
     const joinButton = this.page.getByRole('button', { name: selectors.join }).first();
@@ -105,7 +105,8 @@ export class MeetDriver {
     }).catch(() => { throw new Error('BLACKHOLE_INPUT_UNAVAILABLE'); });
     await this.disableMedia();
     const asked = /^Ask to join/i.test(await joinButton.innerText());
-    await joinButton.click();
+    if (manual) onReady();
+    else await joinButton.click();
     const requestedAt = Date.now();
     while (Date.now() - requestedAt < timeout) {
       // Leave pressed while still waiting to be admitted: stop waiting instead of holding the call open.

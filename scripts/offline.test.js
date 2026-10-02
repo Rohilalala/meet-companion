@@ -381,6 +381,25 @@ test('signed-out Meet guest enters a name before requesting admission', async ()
   assert.equal(joined, true);
 });
 
+test('manual guest join waits for a human click and host admission', async () => {
+  let name = '', clicked = false, ready = false, admitted = false;
+  const guest = { first() { return this; }, waitFor: async () => {}, isVisible: async () => !admitted, fill: async value => { name = value; } };
+  const button = { first() { return this; }, waitFor: async () => {}, innerText: async () => 'Ask to join', click: async () => { clicked = true; } };
+  const hidden = { first() { return this; }, isVisible: async () => admitted };
+  const page = {
+    url: () => 'https://meet.google.com/abc-defg-hij', goto: async () => {}, evaluate: async () => {},
+    locator: selector => selector === selectors.guestName ? guest : selector === selectors.leaveControl || selector === selectors.meetingDetails ? hidden : { first() { return this; }, isVisible: async () => false, innerText: async () => '' },
+    getByRole: () => button,
+  };
+  const driver = new MeetDriver(page);
+  driver.disableMedia = async () => {};
+  const result = await driver.join('https://meet.google.com/abc-defg-hij', { manual: true, onReady: () => { ready = true; admitted = true; } });
+  assert.equal(name, 'Meet Companion');
+  assert.equal(ready, true);
+  assert.equal(clicked, false);
+  assert.equal(result.state, 'in_call');
+});
+
 test('stopping uses Meet presentation UI and never navigates while a share remains active', async () => {
   let presenting = true, menu = false, tracksStopped = false;
   const driver = new MeetDriver({
