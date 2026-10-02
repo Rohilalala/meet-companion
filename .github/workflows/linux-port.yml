@@ -18,10 +18,10 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: npm
-      - name: Install branded Chrome (arm64), PulseAudio and lsof
+      - name: Install branded Chrome (arm64), PulseAudio and trial desktop
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q pulseaudio pulseaudio-utils lsof wget
+          sudo apt-get install -y -q pulseaudio pulseaudio-utils lsof wget iproute2 x11vnc xvfb
           wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb
           sudo apt-get install -y -q ./google-chrome-stable_current_arm64.deb
           google-chrome-stable --version
@@ -36,6 +36,12 @@ jobs:
           pactl list short sinks
           pactl list short sources
       - run: npm run preflight
+      - name: Loopback desktop and windowed Chrome (no accounts)
+        run: |
+          bash aws/start-desktop.sh
+          npm run bot:login -- --dry-run
+          export DISPLAY=:99
+          npm run bot:launch -- --windowed
       - name: Tone through the virtual device (launch, CDP attach, device discovery, routing, fail-closed)
         run: npm run verify:route
       - name: Native tab presentation with tab audio (synthetic page)

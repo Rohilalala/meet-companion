@@ -19,6 +19,21 @@ case "$TYPE" in t4g.medium|t4g.large) ;; *) echo "TYPE must be t4g.medium or t4g
 case "$MINUTES" in ''|*[!0-9]*) echo "MINUTES must be a number" >&2; exit 2;; esac
 [ "$MINUTES" -ge 15 ] && [ "$MINUTES" -le 240 ] || { echo "MINUTES must be 15-240" >&2; exit 2; }
 
+PROJECT_ROOT=$(cd "$(dirname "$0")/.." && pwd -P)
+SOURCE_COMMIT=$(git -C "$PROJECT_ROOT" rev-parse HEAD)
+[[ "$SOURCE_COMMIT" =~ ^[a-f0-9]{40}$ ]] || { echo "Source commit invalid" >&2; exit 2; }
+PROVISION_SHA256=$(shasum -a 256 "$PROJECT_ROOT/aws/provision.sh" | awk '{print $1}')
+[[ "$PROVISION_SHA256" =~ ^[a-f0-9]{64}$ ]] || { echo "Provisioning checksum invalid" >&2; exit 2; }
+if [ "$MODE" = launch ]; then
+  git -C "$PROJECT_ROOT" cat-file -e HEAD:aws/provision.sh || { echo "Provisioning script must be committed" >&2; exit 2; }
+  git -C "$PROJECT_ROOT" diff --quiet HEAD -- aws/launch-test.sh aws/user-data.sh aws/provision.sh || { echo "Commit the AWS scripts before launching" >&2; exit 2; }
+  SOURCE_BRANCH=$(git -C "$PROJECT_ROOT" symbolic-ref --quiet --short HEAD) || { echo "Launch from a named branch" >&2; exit 2; }
+  REMOTE_COMMIT=$(git -C "$PROJECT_ROOT" ls-remote origin "refs/heads/$SOURCE_BRANCH" | awk '{print $1}')
+  [ "$REMOTE_COMMIT" = "$SOURCE_COMMIT" ] || { echo "Push this exact commit before launching" >&2; exit 2; }
+fi
+USER_DATA=$(sed -e "s/__MAX_MINUTES__/$MINUTES/g" -e "s/__SOURCE_COMMIT__/$SOURCE_COMMIT/g" -e "s/__PROVISION_SHA256__/$PROVISION_SHA256/g" "$PROJECT_ROOT/aws/user-data.sh")
+[ "${#USER_DATA}" -le 16384 ] || { echo "EC2 user data exceeds 16 KiB" >&2; exit 2; }
+
 ARN=$(aws sts get-caller-identity --query Arn --output text)
 case "$ARN" in *:root) echo "Refusing to run as the account root user. Use the scoped identity from docs/AWS_TEST.md." >&2; exit 3;; esac
 
@@ -72,7 +87,7 @@ ARGS=(--region "$REGION" --image-id "$AMI" --instance-type "$TYPE" --count 1
   --block-device-mappings 'DeviceName=/dev/sda1,Ebs={VolumeSize=16,VolumeType=gp3,DeleteOnTermination=true}'
   --metadata-options HttpTokens=required
   --tag-specifications "ResourceType=instance,Tags=[{Key=Project,Value=meet-companion-test}]" "ResourceType=volume,Tags=[{Key=Project,Value=meet-companion-test}]"
-  --user-data "$(sed "s/\${MEET_COMPANION_MAX_MINUTES:-120}/$MINUTES/" "$(dirname "$0")/user-data.sh")")
+  --user-data "$USER_DATA")
 
 # AWS reports an authorized dry run as a nonzero DryRunOperation error. Anything else is a failure.
 DRY_RESULT=$(aws ec2 run-instances "${ARGS[@]}" --dry-run 2>&1) && DRY_STATUS=0 || DRY_STATUS=$?

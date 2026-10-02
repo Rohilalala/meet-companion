@@ -50,7 +50,7 @@ Unchanged from macOS: the Chrome debug port binds to loopback only; the bot uses
 
 ## Manual sign-in (cannot be automated, by design)
 
-`npm run bot:login` opens the bot's profile with no debugging port so a person signs in to Google and the music services by hand. On a server there is no screen, so this needs a temporary remote desktop for that one step (for example a VNC server bound to loopback and reached through an SSH tunnel). Never copy a browser profile from another machine; sign in fresh on the Linux host.
+`npm run bot:login` opens the bot's profile with no debugging port so a person signs in to Google and the music services by hand. For the EC2 trial, [AWS_TEST.md](AWS_TEST.md) describes the loopback-only VNC desktop reached through an SSH tunnel. Never copy a browser profile from another machine; sign in fresh on the Linux host.
 
 ## Video
 
