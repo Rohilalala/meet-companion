@@ -1,0 +1,42 @@
+name: linux-port
+# Account-free checks of the Linux port on a real Ubuntu ARM64 machine: branded Chrome launch, CDP attach,
+# virtual audio device discovery, synthetic tone routing and native tab presentation. No meeting is joined.
+on:
+  push:
+    branches: [linux-port]
+  workflow_dispatch:
+jobs:
+  ubuntu-arm64:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      XDG_RUNTIME_DIR: /tmp/meet-companion-runtime
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install branded Chrome (arm64), PulseAudio and lsof
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q pulseaudio pulseaudio-utils lsof wget
+          wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_arm64.deb
+          sudo apt-get install -y -q ./google-chrome-stable_current_arm64.deb
+          google-chrome-stable --version
+          uname -m
+      - run: npm ci
+      - run: npm run check
+      - run: npm run verify:offline
+      - name: Create the virtual audio route
+        run: |
+          mkdir -p -m 700 "$XDG_RUNTIME_DIR"
+          npm run linux:audio
+          pactl list short sinks
+          pactl list short sources
+      - run: npm run preflight
+      - name: Tone through the virtual device (launch, CDP attach, device discovery, routing, fail-closed)
+        run: npm run verify:route
+      - name: Native tab presentation with tab audio (synthetic page)
+        run: npm run verify:presentation

@@ -17,6 +17,8 @@
     "verify:browser": "node scripts/verify-browser.js",
     "verify:meet-silence": "node scripts/verify-meet-silence.js",
     "verify:presentation": "node scripts/verify-presentation.js",
+    "verify:route": "node scripts/verify-route.js",
+    "linux:audio": "bash scripts/linux-audio.sh",
     "e0": "node scripts/e0.js",
     "e1": "node scripts/e1.js",
     "e2": "node scripts/e2.js",
