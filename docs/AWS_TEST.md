@@ -2,6 +2,8 @@
 
 Nothing here has been launched. `aws/launch-test.sh` verifies the exact launch request with a free AWS dry run once its security group and SSH key pair exist. On a fresh account, use `aws/launch-test.sh --prepare` to create only those free prerequisites and run the dry run. The script reports denials as failures; it launches a billable instance only with `--launch`.
 
+The launch pins the current pushed Git commit and the SHA-256 of `aws/provision.sh` in EC2 user data. First boot schedules shutdown before installing Chrome, Node 22, PulseAudio, Xvfb, x11vnc, ffmpeg, yt-dlp, and the checked-out repository. The bot does **not** auto-join; account sign-in and the Meet test remain manual. If downloads or setup fail, the shutdown deadline still applies. The actual EC2 bootstrap has not been run yet.
+
 The launch guard has account-free shell tests: `node --test aws/launch-test.test.js`.
 
 ## Cost (Mumbai, `ap-south-1`)
@@ -25,10 +27,11 @@ Two settings keep the bill bounded: CPU credits are set to `standard`, so a busy
 ## Before the first paid launch — needs you
 
 1. **A scoped AWS identity.** The AWS CLI on the Mac is signed in as the account root user, and `aws/launch-test.sh` refuses to run as root. Create an IAM user or role with the example `aws/test-policy.json` attached and configure the CLI to use it. The example restricts instance type, region and project tag, but its key-pair and security-group permissions are region-wide; review and tighten it before production use.
-2. **Prepare and dry-run**: `aws/launch-test.sh --prepare` creates the free SSH key pair and security group, then asks AWS to validate the full instance request without launching it. On later runs, `aws/launch-test.sh` checks the existing prerequisites without changing AWS. Review its output before using `aws/launch-test.sh --launch` for the paid test. A second tagged instance is refused.
-3. **Sign in by hand on the instance**: the bot's Google account, and any music service, through `npm run bot:login` over a temporary remote desktop. Sign-in is never automated and no profile is copied from the Mac.
-4. **Watch from a second device** in a test meeting: admission, a generated tone, a song, echo, and a `/video` at 1080p for frame rate and aspect ratio. Only this makes a result receiver-verified.
-5. **Stop or terminate** the instance afterwards (commands are printed at launch).
+2. **Prepare and dry-run**: from a clean, pushed branch containing this kit, `aws/launch-test.sh --prepare` creates the free SSH key pair and security group, then asks AWS to validate the full instance request without launching it. On later runs, `aws/launch-test.sh` checks the existing prerequisites without changing AWS. A second tagged instance is refused.
+3. **Paid launch only after reviewing the plan**: run `aws/launch-test.sh --launch`. It refuses an uncommitted AWS script or a commit that does not match the public branch. Note the instance ID and printed stop/terminate commands. On the instance, wait for `sudo cloud-init status --wait`; `/var/lib/meet-companion/provisioned-commit` appears only after setup completes. Inspect `/var/log/cloud-init-output.log` if it fails. Never paste that log into a public issue without reviewing it.
+4. **Sign in by hand**: on the Mac run `aws/connect.sh` to open an SSH shell and tunnel local port 5901 to the instance's loopback-only VNC listener. In that shell run `sudo cloud-init status --wait`, then `~/meet-companion/aws/start-desktop.sh --login`. On the Mac open `vnc://127.0.0.1:5901` and sign in to the dedicated bot Google account and music services yourself. VNC has no separate password because it is loopback-only behind SSH; never forward port 5901 through the EC2 security group. Close the dedicated Chrome login window when done. The profile stays on the instance and is never copied from the Mac.
+5. **Run the trial**: edit ignored `~/meet-companion/config.local.json` on the instance with the consenting test meeting link, then run `~/meet-companion/aws/run-bot.sh` in the SSH shell. It recreates the virtual audio route, checks local prerequisites and starts the bot. Watch from a second device: admission, a generated tone, a song, echo, and a `/video` at 1080p for frame rate and aspect ratio. Only this makes a result receiver-verified.
+6. **Stop or terminate** the instance afterwards (commands are printed at launch). Stopping preserves its disk charge; terminating removes the root volume. The instance also requests its own stop at the chosen deadline after every boot.
 
 ## What the test should record
 
