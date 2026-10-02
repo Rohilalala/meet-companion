@@ -1,8 +1,14 @@
 # Phase 0 — feasibility report
 
-Date: 2026-09-30 (Asia/Kolkata). Machine evidence timestamps are UTC.
+Original report: 2026-09-30 (Asia/Kolkata). Machine evidence timestamps are UTC.
 
-**Decision: latest ASK-TO-JOIN confirmed by the host; earlier admission claim retracted. Remaining live gates unproven. Stop before Phase 1.** The owner reported that the earlier attempt was never admitted. On a separately authorized retry, the owner confirmed admission; a subsequent bot UI check also reports in_call. Admission latency was not measured. The retry initially had its synthetic camera and BlackHole microphone on; both were then turned off and verified. No receiver-audible playback has been tested. Session persistence, playback, receiver camera quality, chat reliability and Spotify control remain unproven.
+## 2026-10-02 Ubuntu ARM64 / AWS update
+
+This is a separate Linux trial, not a retroactive E0–E6 pass. Branded Chrome 154 launched and attached on the test instance; preflight had no blockers. The local virtual route passed its account-free check: synthetic tone RMS 0.14013, silent RMS 0, processing flags off, and missing-route playback refused. A human entered the test Meet as a signed-out guest from ordinary remote Chrome. The automated bot's headless and windowed guest clicks were denied before the host saw a request; the cause is unproven. With the bot's visible browser and init scripts, the owner manually clicked **Ask to join**, the host admitted Meet Companion, and the controller reported `in_call` and `LISTENING`.
+
+The owner saw a `/bot help` chat reply. During a 15-second generated 440 Hz tone through the bot microphone route, outbound Opus bytes rose from 1,868 to 127,757; the route reported no error. The owner reported steady sound without echo, and the bot microphone was verified muted afterward. This short check does not meet E3's 60-second requirement. A YouTube search through yt-dlp returned `YOUTUBE_BLOCKED`. The YouTube web player asked for sign-in and returned `PLAYBACK_FAILED` before sharing. No Spotify/Apple Music or receiver video quality result was obtained. No meeting media or raw chat was recorded.
+
+**2026-09-30 decision: latest ASK-TO-JOIN confirmed by the host; earlier admission claim retracted. Remaining live gates unproven. Stop before Phase 1.** The owner reported that the earlier attempt was never admitted. On a separately authorized retry, the owner confirmed admission; a subsequent bot UI check also reports in_call. Admission latency was not measured. The retry initially had its synthetic camera and BlackHole microphone on; both were then turned off and verified. No receiver-audible playback had been tested at that time. Session persistence, playback, receiver camera quality, chat reliability and Spotify control remained unproven.
 
 The original request is preserved in [BRIEF.md](BRIEF.md). The Phase 0 harness now includes a branded-Chrome launcher, both tab init scripts, localhost tone/beep/file player, camtest, minimal Meet driver, Spotify PKCE/device-targeted API calls, and E0–E6 runners. No Phase 1 extension, activity queue, or production session controller is implemented.
 

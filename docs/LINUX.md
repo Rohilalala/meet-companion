@@ -18,7 +18,9 @@ Two kinds of evidence. Do not mix them up.
 | Native tab presentation with tab audio (synthetic page) | Pass: 1920×1080 browser surface, one audio track, energy 0.140 |
 | `npm run check`, `npm run verify:offline` | Pass, 22/22 |
 
-**Receiver-verified in a real Meet on Linux** — nothing yet. Not run: joining a meeting, admission, chat commands, what a second participant hears and sees (sound quality, echo, video frame rate and aspect ratio), Spotify/Apple Music playback, and yt-dlp from a data-centre address. These need a signed-in bot account and a person watching from another device.
+**Receiver-verified in a real Meet on Linux** — on a 2026-10-02 Ubuntu ARM64 EC2 trial, the owner manually pressed **Ask to join** in the visible bot browser and confirmed the host admitted Meet Companion. The controller reported `in_call` and `LISTENING`; the owner saw its `/bot help` reply. A generated 440 Hz tone played for 15 seconds through the virtual route; the owner reported steady sound without echo. Bot outbound Opus bytes rose from 1,868 to 127,757 during that interval, and the route reported no error. The bot microphone was verified muted afterward. This is a short synthetic audio check, not a 60-second E3 pass or a service playback qualification. No meeting media was recorded.
+
+The automated headless guest attempt showed Meet's denial screen before the host saw a request. An automated windowed guest click was also denied before host notification. Manual clicking in the same bot browser was admitted. The reason for the automated denial is not proven. Server-side YouTube playback returned `YOUTUBE_BLOCKED`; the YouTube web player asked for sign-in and did not start a share. Spotify/Apple Music playback and receiver video frame rate/aspect ratio remain untested on Linux.
 
 ## Setup on Ubuntu 24.04 ARM64
 
@@ -58,6 +60,6 @@ Unchanged from macOS: the Chrome debug port binds to loopback only; the bot uses
 
 ## Known gaps on Linux
 
-- Headless Chrome was used for every check; a visible window on a virtual display is untested.
+- Visible Chrome on Xvfb was used for the guest trial above; account-free CI also verifies its launch. Manual guest admission is currently required for this signed-out test meeting.
 - Software video encoding on a 2-vCPU ARM instance is unmeasured; 1080p presentation may need a larger instance.
 - YouTube usually refuses anonymous yt-dlp from data-centre addresses. If it does, YouTube playback fails with `YOUTUBE_BLOCKED`; there is no workaround in this branch.
