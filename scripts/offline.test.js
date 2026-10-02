@@ -365,6 +365,22 @@ test('join stops waiting for admission when Leave is pressed', async () => {
   assert.equal(checks, 3, 'waited while not cancelled, then stopped');
 });
 
+test('signed-out Meet guest enters a name before requesting admission', async () => {
+  let guestVisible = true, name = '', joined = false, checks = 0;
+  const guest = { first() { return this; }, waitFor: async () => {}, isVisible: async () => guestVisible, fill: async value => { name = value; } };
+  const button = { first() { return this; }, waitFor: async () => {}, innerText: async () => 'Ask to join', click: async () => { assert.equal(name, 'Meet Companion'); joined = true; guestVisible = false; } };
+  const page = {
+    url: () => 'https://meet.google.com/abc-defg-hij', goto: async () => {}, evaluate: async () => {},
+    locator: selector => selector === selectors.guestName ? guest : selector === 'body' ? { innerText: async () => joined ? 'Asking to be let in' : '' } : { first() { return this; }, isVisible: async () => false },
+    getByRole: () => button,
+  };
+  const driver = new MeetDriver(page);
+  driver.disableMedia = async () => {};
+  await assert.rejects(() => driver.join('https://meet.google.com/abc-defg-hij', { cancelled: () => ++checks > 1 }), /JOIN_CANCELLED/);
+  assert.equal(name, 'Meet Companion');
+  assert.equal(joined, true);
+});
+
 test('stopping uses Meet presentation UI and never navigates while a share remains active', async () => {
   let presenting = true, menu = false, tracksStopped = false;
   const driver = new MeetDriver({
