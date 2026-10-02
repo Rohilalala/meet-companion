@@ -19,7 +19,7 @@ if (!live) {
     const meeting = process.argv.indexOf('--meeting');
     stage = 'join'; await h.driver.join(meeting > 0 ? process.argv[meeting + 1] : h.config.meetingLink, {
       cancelled: () => interrupted,
-      timeout: manualJoin ? 300000 : 180000,
+      timeout: manualJoin ? 600000 : 180000,
       manual: manualJoin,
       onReady: () => emit('BOT', { state: 'PREJOIN_READY', action: 'Click Ask to join in the bot window; the host must admit the guest.' }),
     });

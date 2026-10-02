@@ -29,8 +29,14 @@ const darwin = {
   },
 };
 
-// Names created by scripts/linux-audio.sh. Chrome shows the device.description as the label.
-export const linuxAudio = { sink: 'meet_companion', sinkLabel: 'MeetCompanionSink', source: 'meet_companion_mic', sourceLabel: 'MeetCompanionMic', discard: 'meet_companion_discard' };
+// Each concurrent bot needs its own virtual mic. Chrome shows device.description as the label.
+const slotText = process.env.MEET_BOT_SLOT ?? '1';
+if (!/^(?:[1-9]|1[0-5])$/.test(slotText)) throw new Error('BOT_SLOT_INVALID');
+export const botSlot = Number(slotText);
+if (botSlot > 1 && process.platform !== 'linux') throw new Error('BOT_SLOT_UNSUPPORTED_PLATFORM');
+const suffix = botSlot === 1 ? '' : `_${botSlot}`;
+const labelSuffix = botSlot === 1 ? '' : String(botSlot);
+export const linuxAudio = { sink: `meet_companion${suffix}`, sinkLabel: `MeetCompanionSink${labelSuffix}`, source: `meet_companion_mic${suffix}`, sourceLabel: `MeetCompanionMic${labelSuffix}`, discard: 'meet_companion_discard' };
 const linux = {
   id: 'linux',
   route: { output: `^${linuxAudio.sinkLabel}$`, input: `^${linuxAudio.sourceLabel}$`, missing: 'VIRTUAL_AUDIO_ROUTE_MISSING', defaultForbidden: 'VIRTUAL_SINK_DEFAULT_OUTPUT_FORBIDDEN' },

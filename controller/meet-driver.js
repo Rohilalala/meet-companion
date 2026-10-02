@@ -66,7 +66,7 @@ export class MeetDriver {
     if (denied.test(text)) return 'ADMISSION_DENIED';
     if (removed.test(text)) return 'REMOVED';
     if (ended.test(text)) return 'MEETING_ENDED';
-    if (/Asking to be let in|You'll join when someone lets you in|Wait for the host/i.test(text)) return 'awaiting_admission';
+    if (/Asking to be let in|You'll join when someone lets you in|Wait for the host|Please wait until a meeting host brings you into the call/i.test(text)) return 'awaiting_admission';
     // A hang-up control alone is not evidence of admission. CSS locators also
     // see rendered controls when a Meet modal hides them from accessibility.
     if (await this.page.locator(selectors.leaveControl).first().isVisible() &&

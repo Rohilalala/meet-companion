@@ -3,7 +3,7 @@ import { constants } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { hostname } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { platform } from './platform.js';
+import { botSlot, platform } from './platform.js';
 export { requireRuntime } from './platform.js';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -26,6 +26,11 @@ export async function settings() {
     raw = await readFile(join(root, platform?.id === 'linux' ? 'config.example.linux.json' : 'config.example.json'), 'utf8');
   }
   const config = JSON.parse(raw);
+  if (botSlot > 1) {
+    config.userDataDir = `.local/chrome-bot-${botSlot}`;
+    config.port = 3300 + botSlot;
+    config.debugPort = 9300 + botSlot;
+  }
   for (const key of ['chromePath', 'userDataDir']) {
     if (typeof config[key] !== 'string' || !config[key].trim()) throw new Error('CONFIG_INVALID');
   }

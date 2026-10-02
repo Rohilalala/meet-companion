@@ -71,6 +71,21 @@ test('yt-dlp arguments are anonymous, single-video, audio-only, and end option p
   assert.deepEqual(streamArgs('x').slice(-4), ['-o', '-', '--', 'x']);
 });
 
+test('WARP opt-in routes both yt-dlp resolution and media through loopback', () => {
+  const previous = process.env.MEET_YTDLP_WARP;
+  process.env.MEET_YTDLP_WARP = '1';
+  try {
+    for (const build of [resolveArgs, streamArgs]) {
+      const args = build('https://www.youtube.com/watch?v=abcdefghijk');
+      assert.equal(args[args.indexOf('--proxy') + 1], 'socks5://127.0.0.1:40000');
+      assert.ok(args.indexOf('--proxy') < args.indexOf('--'));
+    }
+  } finally {
+    if (previous === undefined) delete process.env.MEET_YTDLP_WARP;
+    else process.env.MEET_YTDLP_WARP = previous;
+  }
+});
+
 test('yt-dlp failures map to fixed codes', () => {
   assert.equal(ytdlpError('', Object.assign(new Error('spawn yt-dlp ENOENT'), { code: 'ENOENT' })), 'YTDLP_MISSING');
   for (const text of ['ERROR: unable to download video data: HTTP Error 403: Forbidden', "ERROR: [youtube] x: Sign in to confirm you’re not a bot", 'ERROR: This video requires login', 'ERROR: login required']) assert.equal(ytdlpError(text), 'YOUTUBE_BLOCKED', text);
@@ -348,6 +363,7 @@ test('Meet admission requires more than a leave button and respects waiting/term
   assert.equal(await driver.state(), 'in_call');
   for (const [text, expected] of [
     ['Asking to be let in', 'awaiting_admission'],
+    ['Please wait until a meeting host brings you into the call', 'awaiting_admission'],
     ['Your request to join was denied', 'ADMISSION_DENIED'],
     ["You've been removed", 'REMOVED'],
     ['You left the meeting', 'MEETING_ENDED'],
@@ -535,6 +551,28 @@ test('Spotify mutations target only the selected web player; takeover and volume
     await spotify.nowPlaying(); takenOver = true;
     await assert.rejects(() => spotify.nowPlaying(), /STREAM_TAKEN_OVER/);
   } finally { spotify.close(); }
+});
+
+test('synthetic camera stays static while off and animates only during camtest', () => {
+  let draws = 0, interval = null;
+  class MediaElement { play() {} }
+  class Document { createElement() {} }
+  class Element { attachShadow() {} }
+  Object.defineProperty(MediaElement.prototype, 'muted', { configurable: true, get() { return true; }, set() {} });
+  const context = {
+    window: { Audio: MediaElement }, navigator: { mediaDevices: { enumerateDevices: async () => [], getUserMedia: async () => {} } },
+    HTMLMediaElement: MediaElement, Document, Element,
+    MutationObserver: class { observe() {} },
+    setInterval: fn => { interval = fn; return 1; }, clearInterval: () => { interval = null; },
+    document: { createElement: () => ({ getContext: () => ({ fillRect() { draws++; }, fillText() {} }), captureStream: () => ({ getVideoTracks: () => [{}] }) }), querySelectorAll: () => [], addEventListener() {} },
+  };
+  runInNewContext(`(${meetInit.toString()})()`, context);
+  assert.equal(draws, 1); assert.equal(interval, null);
+  context.window.meetCompanion.camtest(0);
+  assert.equal(typeof interval, 'function'); interval();
+  assert.equal(draws, 2); assert.equal(context.window.meetCompanion.status().framesDrawn, 1);
+  context.window.meetCompanion.stopCamtest();
+  assert.equal(interval, null); assert.equal(draws, 3);
 });
 
 test('Meet microphone override pins BlackHole, disables processing, and never falls back', async () => {

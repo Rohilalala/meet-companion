@@ -3,10 +3,11 @@ import { randomBytes } from 'node:crypto';
 
 // Anonymous, audio-only, nothing on disk: ignore user config (it could add cookies), never read cookies, no cache dir.
 const base = ['--ignore-config', '--no-cookies', '--no-cookies-from-browser', '--no-cache-dir', '--no-playlist', '--no-warnings'];
+const route = () => process.env.MEET_YTDLP_WARP === '1' ? ['--proxy', 'socks5://127.0.0.1:40000'] : [];
 // Video: VP9 <=1080p + WebM audio, muxed live by ffmpeg to WebM on stdout (Chrome plays it; nothing touches disk).
 const pick = kind => kind === 'video' ? ['-f', 'bv*[height<=1080][ext=webm]+ba[ext=webm]', '--merge-output-format', 'webm'] : ['-f', 'bestaudio'];
-export const resolveArgs = (target, kind = 'audio') => [...base, ...pick(kind), '--print', 'id', '--print', 'title', '--print', 'ext', '--print', 'urls', '--', target];
-export const streamArgs = (target, kind = 'audio') => [...base, ...pick(kind), '-o', '-', '--', target];
+export const resolveArgs = (target, kind = 'audio') => [...base, ...route(), ...pick(kind), '--print', 'id', '--print', 'title', '--print', 'ext', '--print', 'urls', '--', target];
+export const streamArgs = (target, kind = 'audio') => [...base, ...route(), ...pick(kind), '-o', '-', '--', target];
 export const target = command => command.search ? 'ytsearch1:' + command.search : command.link;
 
 export function errorCode(text = '', spawnError = null) {

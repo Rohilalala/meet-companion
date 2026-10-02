@@ -84,3 +84,9 @@ Send button is "Send a message" (send chat with Enter, verify the box cleared); 
 
 ### 2026-10-02 — Meet Settings can label its close button “Close dialogue”
 The AWS bot reached Music Audio settings, then failed at the old `Close dialog` selector before yt-dlp playback began. The live DOM labelled the control `Close dialogue`. The selector now accepts either spelling; its match is verified against the observed label, while receiver playback after this edit remains untested.
+
+### 2026-10-02 — Recognize Meet's current guest waiting text
+A windowed guest request displayed “Please wait until a meeting host brings you into the call.” The driver previously returned joining for that text. Include this exact observed phrase in awaiting_admission; the offline admission-state test now passes. This improves state reporting and does not itself establish host admission.
+
+### 2026-10-02 — Draw the synthetic camera only during camtest
+The Meet init script redrew its 1280×720 canvas at 30 fps even while the bot camera was off. Draw a static branded frame at initialization and track creation; start the 30 fps timer only in camtest and clear it on stopCamtest. The offline test verifies one idle draw, diagnostic animation, and timer cleanup; live CPU savings remain unmeasured.

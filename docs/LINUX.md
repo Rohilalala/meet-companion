@@ -22,6 +22,10 @@ Two kinds of evidence. Do not mix them up.
 
 The automated headless guest attempt showed Meet's denial screen before the host saw a request. An automated windowed guest click was also denied before host notification. Manual clicking in the same bot browser was admitted. The reason for the automated denial is not proven. Direct yt-dlp on AWS returned `YOUTUBE_BLOCKED`, while the same version resolved the same video on the owner's Mac. A loopback SSH relay delivered YouTube media from Mac to AWS; after a Meet Settings selector correction, the owner confirmed the requested song stayed audible for at least 30 seconds in the replacement meeting. The relay later timed out; automatic SSH reconnection was verified at the network boundary, but receiver playback after recovery remains untested. The YouTube web player asked for sign-in and did not start a share. Spotify/Apple Music playback and receiver video frame rate/aspect ratio remain untested on Linux.
 
+A later EC2 trial used Cloudflare WARP as a loopback-only yt-dlp proxy, without the Mac media relay. Direct yt-dlp still hit the bot check, while WARP resolved the requested video and streamed its audio. After a restart, the bot joined the replacement test Meet by manual guest admission, passed 25/25 offline checks, and used WARP for both yt-dlp calls. The owner confirmed the correct song stayed audible in Meet for at least 30 seconds. The bot exited and EC2 was stopped. This verifies one short server-only YouTube audio run; repeated sessions, other videos, echo, and video quality remain untested.
+
+The 4 GiB instance also ran two isolated bot browsers at prejoin at the same time. A synthetic tone injected into either slot's virtual sink registered only on that slot's microphone; a third slot passed the full local tone and fail-closed routing check. Two admitted Meet sessions and independent songs were not reached in this trial, so there is no measured active-call capacity yet. See [FEASIBILITY.md](FEASIBILITY.md) for the numerical samples.
+
 ## Setup on Ubuntu 24.04 ARM64
 
 ```sh
@@ -62,4 +66,4 @@ Unchanged from macOS: the Chrome debug port binds to loopback only; the bot uses
 
 - Visible Chrome on Xvfb was used for the guest trial above; account-free CI also verifies its launch. Manual guest admission is currently required for this signed-out test meeting.
 - Software video encoding on a 2-vCPU ARM instance is unmeasured; 1080p presentation may need a larger instance.
-- Anonymous yt-dlp from the trial's AWS address received YouTube's sign-in/bot check. `aws/run-with-local-media.sh` can instead fetch through the owner's Mac over a loopback SSH relay; the Mac must remain online. The receiver confirmed at least 30 seconds of correct YouTube audio. A dropped tunnel now reconnects automatically, but that recovery has only been verified at the network boundary.
+- Anonymous yt-dlp from the trial's AWS address received YouTube's sign-in/bot check. The WARP-backed server-only route produced one receiver-audible YouTube audio run, but WARP is not installed by the fresh-instance provisioner and long-term reliability is unknown. The older `aws/run-with-local-media.sh` Mac relay also played audio; it requires the Mac to stay online and upload the media to EC2.
