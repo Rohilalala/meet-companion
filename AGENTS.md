@@ -1,7 +1,7 @@
 # Meet Companion
 
 ## Purpose
-Private Google Meet music participant using a dedicated branded Chrome profile and BlackHole 2ch, with a Phase 0 diagnostic harness. The owner additionally authorized a minimal live `/bot` controller for Spotify, Apple Music and YouTube Music audio, plus native YouTube tab video/audio sharing.
+Private Google Meet music participant using a dedicated branded Chrome profile and a dedicated virtual audio route (BlackHole 2ch on macOS, a PulseAudio/PipeWire sink on Linux; see `scripts/platform.js`), with a Phase 0 diagnostic harness. The owner additionally authorized a minimal live `/bot` controller for Spotify, Apple Music and YouTube Music audio, plus native YouTube tab video/audio sharing.
 
 ## Run / test
 - `nvm use`

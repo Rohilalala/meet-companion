@@ -1,0 +1,56 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "ReadOnlyDiscovery",
+      "Effect": "Allow",
+      "Action": ["ec2:Describe*", "ssm:GetParameter"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "ap-south-1" } }
+    },
+    {
+      "Sid": "LaunchOnlySmallArmInstancesTaggedForThisTest",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": "arn:aws:ec2:ap-south-1:*:instance/*",
+      "Condition": {
+        "StringEquals": { "aws:RequestTag/Project": "meet-companion-test" },
+        "ForAnyValue:StringEquals": { "ec2:InstanceType": ["t4g.medium", "t4g.large"] }
+      }
+    },
+    {
+      "Sid": "LaunchSupportingResources",
+      "Effect": "Allow",
+      "Action": "ec2:RunInstances",
+      "Resource": [
+        "arn:aws:ec2:ap-south-1::image/*",
+        "arn:aws:ec2:ap-south-1:*:subnet/*",
+        "arn:aws:ec2:ap-south-1:*:network-interface/*",
+        "arn:aws:ec2:ap-south-1:*:security-group/*",
+        "arn:aws:ec2:ap-south-1:*:key-pair/meet-companion-test",
+        "arn:aws:ec2:ap-south-1:*:volume/*"
+      ]
+    },
+    {
+      "Sid": "TagOnlyAtCreation",
+      "Effect": "Allow",
+      "Action": "ec2:CreateTags",
+      "Resource": "arn:aws:ec2:ap-south-1:*:*/*",
+      "Condition": { "StringEquals": { "ec2:CreateAction": ["RunInstances", "CreateSecurityGroup", "CreateKeyPair"] } }
+    },
+    {
+      "Sid": "ControlOnlyThisTestsInstances",
+      "Effect": "Allow",
+      "Action": ["ec2:StartInstances", "ec2:StopInstances", "ec2:TerminateInstances"],
+      "Resource": "arn:aws:ec2:ap-south-1:*:instance/*",
+      "Condition": { "StringEquals": { "aws:ResourceTag/Project": "meet-companion-test" } }
+    },
+    {
+      "Sid": "OneKeyPairAndOneSecurityGroup",
+      "Effect": "Allow",
+      "Action": ["ec2:CreateKeyPair", "ec2:DeleteKeyPair", "ec2:CreateSecurityGroup", "ec2:DeleteSecurityGroup", "ec2:AuthorizeSecurityGroupIngress", "ec2:RevokeSecurityGroupIngress"],
+      "Resource": "*",
+      "Condition": { "StringEquals": { "aws:RequestedRegion": "ap-south-1" } }
+    }
+  ]
+}
