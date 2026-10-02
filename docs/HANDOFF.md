@@ -66,10 +66,10 @@ Measured only; live Meet acceptance has **not** run.
 
 ## Repository and instructions
 
-- Actual repository: `/Users/adityarohilla/Documents/meet-companion`.
+- Actual repository: `~/Documents/meet-companion`.
 - Branch: `codex/phase-zero`.
-- The conversation's default directory, `/Users/adityarohilla/Documents/ChatGPT/Meet Bot`, is not the working repository. Use an explicit working directory.
-- Node: 22.x; installed binary directory `/Users/adityarohilla/.nvm/versions/node/v22.23.3/bin`.
+- The conversation's default directory, `a different folder`, is not the working repository. Use an explicit working directory.
+- Node: 22.x; installed binary directory `~/.nvm/versions/node/v22.23.3/bin`.
 - Playwright: 1.63.0. macOS Apple Silicon, branded Google Chrome. Chrome was previously observed as 154.0.8037.58; recheck if relevant.
 - Read root and affected-directory `AGENTS.md`, the machine instructions under `~/.Codex/`, project notes `~/.Codex/projects/meet-companion.md`, and recent `~/.Codex/mistakes/log.md` before editing.
 - Current changes are uncommitted. Preserve them. Do not reset the checkout or rebuild elsewhere and lose this state.
@@ -104,8 +104,8 @@ For a controlled restart, interrupt the owned runtime gracefully (Ctrl-C in its 
 ## Running and checking
 
 ```sh
-cd /Users/adityarohilla/Documents/meet-companion
-export PATH="/Users/adityarohilla/.nvm/versions/node/v22.23.3/bin:$PATH"
+cd ~/Documents/meet-companion
+export PATH="~/.nvm/versions/node/v22.23.3/bin:$PATH"
 
 npm run check
 npm run verify:offline
